@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chris' Website - Home</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <header>
+        <a href="/index.html"><div class="logo">My Portfolio</div></a>
+        <button class="menu-toggle" aria-label="Toggle Menu">
+            ☰
+        </button>
+        <nav class="nav-menu">
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="work-related.html">Work Related</a></li>
+                <li><a href="ml-projects.html">ML Projects</a></li>
+                <li><a href="games.html">Games</a></li>
+                <li><a href="health-fitness.html">Health & Fitness</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <br>
+        <h1>Welcome to My Website</h1>
+        <p>Hello, my name is Christofer Piedra and welcome to my personal website!
+            <br>
+            <br>
+            I will be updating this website over time with a bunch of cool things that will tell you more about what I do professionally and what kinds of projects I'm interested in.
+        </p>
+        <img src="/images/christofer.jpeg" alt="Photo of me">
+        <p>
+            <div class="description">Main pages so far are:
+                <ul>
+                    <br>
+                    <li><strong>Games:</strong> Computer games that I've programmed like hangman.</li>
+                    <li><strong>Work Related:</strong> Important things like my full CV, downloadable resume, links to all of my public reccomendations, and hopefully soon my journal publication!</li>
+                    <li><strong>ML Projects:</strong> Outcomes of ML projects that I've worked on.</li>
+                    <li><strong>Health & Fitness</strong> Long term development projects intended to be interactive. Will have functionality such as a workout tracker.</li>
+                </ul>
+            </div>
+        
+        
+    </main>
+
+    <script>
+        document.querySelector(".menu-toggle").addEventListener("click", function () {
+            const navMenu = document.querySelector(".nav-menu");
+            navMenu.classList.toggle("open");
+
+        });
+    </script>
+</body>
+</html>

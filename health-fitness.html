@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chris' Fitness</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <header>
+        <a href="/index.html"><div class="logo">My Portfolio</div></a>
+        <button class="menu-toggle" aria-label="Toggle Menu">
+            ☰
+        </button>
+        <nav class="nav-menu">
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="work-related.html">Work Related</a></li>
+                <li><a href="ml-projects.html">ML Projects</a></li>
+                <li><a href="games.html">Games</a></li>
+                <li><a href="health-fitness.html">Health & Fitness</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <br>
+        <h1>Health & Fitness</h1>
+        <p>This hasn't been started yet, but oh boy am I excited to get going once the rest of this site has been built out more!</p>
+    </main>
+
+    <script>
+        document.querySelector(".menu-toggle").addEventListener("click", function () {
+            const navMenu = document.querySelector(".nav-menu");
+            navMenu.classList.toggle("open");
+        });
+    </script>
+</body>
+</html>

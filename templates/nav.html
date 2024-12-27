@@ -1,0 +1,38 @@
+<!-- nav.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Navigation Menu</title>
+  <link rel="stylesheet" href="/app/static/css/nav.css">
+</head>
+<body>
+  <!-- The "Close" button -->
+  <nav class="nav-menu">
+    <button class="close-btn" aria-label="Close navigation menu">✕</button>
+    
+    <ul>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="work-related.html">Work Related</a></li>
+      <li><a href="ml-projects.html">ML Projects</a></li>
+      <li><a href="games.html">Games</a></li>
+      <li><a href="health-fitness.html">Health & Fitness</a></li>
+    </ul>
+  </nav>
+
+  <script>
+    // This script toggles the nav inside the iframe when the parent says 'toggle-menu'
+    window.addEventListener('message', (event) => {
+      if (event.data === 'toggle-menu') {
+        const navMenu = document.querySelector('.nav-menu');
+        navMenu.classList.toggle('open');
+      }
+    });
+
+    // On click of our new close button, ask the parent to close the menu
+    document.querySelector('.close-btn').addEventListener('click', () => {
+      window.parent.postMessage('close-menu', '*');
+    });
+  </script>
+</body>
+</html>

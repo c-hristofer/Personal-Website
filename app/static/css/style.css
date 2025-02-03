@@ -27,8 +27,8 @@ header {
 
 .menu-toggle {
     position:absolute;         /* pin to a fixed position in the viewport */
-    top: 1rem;               /* adjust to your liking */
-    right: 1rem;             /* adjust to your liking */
+    top: 1rem;
+    right: 1rem;
     background: none;
     border: none;
     font-size: 1.75em;
@@ -88,7 +88,7 @@ p {
 .profile-image {
     width: 25em;
     max-width: 100%;
-    aspect-ratio: 1 / 1; /* Enforces a square aspect ratio */
+    aspect-ratio: 1 / 1; /* Square aspect ratio */
     object-fit: cover;
     border-radius: 50%;
     object-fit: cover;
@@ -130,3 +130,6 @@ a {
     text-decoration: none;
     color: inherit;
 }
+
+/* Hangman styline */
+

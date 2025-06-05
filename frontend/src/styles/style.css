@@ -1,0 +1,189 @@
+/* Reset styles */
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Roboto', sans-serif;
+    box-sizing: border-box;
+    color: #333;
+}
+
+/* Header styles */
+header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5em 2em .75em 2em;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.logo {
+    font-size: clamp(.25em, 4vh, 2rem);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #0056b3;
+    transition: color 0.2s ease-in-out;
+}
+
+.logo:hover {
+    color: #003866;
+}
+
+.menu-toggle {
+    background-color: transparent;
+    border: none;
+    font-size: clamp(.25em, 4vh, 2rem);
+    color: #0056b3;
+    cursor: pointer;
+    padding: 0.5em 0.75em;
+    border-radius: 0.5em;
+    transition: background-color 0.3s ease-in-out, color 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+.menu-toggle:hover {
+    background-color: #003866;
+    color: white;
+}
+/* Normal (inline) navigation menu style */
+.nav-menu {
+    position: fixed;
+    top: 0;
+    left: -100vw;
+    width: 100vw;
+    height: 100vh;
+    background: #fff;
+    transition: top 0.3s ease-in-out;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* When .open is added, pop it into view */
+.nav-menu.open {
+    left: 0;
+  }
+  
+  /* Style the “X” close button that appears inside the full‐screen menu */
+  .nav-menu .close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background-color: transparent;
+    border: none;
+    font-size: clamp(.25rem, 4vh, 2rem);
+    cursor: pointer;
+    color: #0056b3;
+    transition: color  0.2s ease-in-out;
+    padding: 0.5em 0.75em;
+    border-radius: 0.5em;
+  }
+
+.nav-menu .close-btn:hover, .nav-menu a:hover {
+    color: white;
+    background-color: #003866;
+  }
+
+.nav-menu ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    text-align: center;
+}
+
+.nav-menu li {
+    margin: clamp(0.25rem, 3vh, 1rem) 0;
+    color: #0056b3;
+    padding: clamp(.5rem, 2vh, 1rem) clamp(.75rem, 2vh, 1.5rem);
+}
+
+.nav-menu a {
+    font-size: clamp(0.5rem, 5vh, 2.5rem);
+    text-decoration: none;
+    transition: color 0.2s ease-in-out;
+    padding: 0.5em 0.75em;
+    border-radius: 0.5em;
+}
+
+/* Main content styles */
+main {
+    padding: 2em;
+    max-width: 1200px;
+    margin: 2em auto;
+    background: #fff;
+    box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.1);
+    border-radius: 0.5em;
+    line-height: 1.6;
+    text-align: center;
+}
+
+h1 {
+    font-size: 2.8em;
+    margin-bottom: 0.5em;
+    color: #0056b3;
+    text-transform: capitalize;
+    border-bottom: 3px solid #ffd700;
+    padding-bottom: 0.2em;
+    display: inline-block;
+}
+
+p {
+    color: #555;
+    font-size: 1.1em;
+    margin: 2em;
+}
+
+.profile-image {
+    width: 25em;
+    max-width: 100%;
+    aspect-ratio: 1 / 1; /* Square aspect ratio */
+    object-fit: cover;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 15px;
+    display: inline-block;
+}
+
+
+
+/* Card styles (styled like nav-menu items) */
+.main-card {
+    display: block;
+    max-width: 500px;
+    margin: 1rem auto;
+    padding: 1rem 1.5rem;
+    background-color: #0056b3;
+    border-radius: 0.5em;
+    text-align: center;
+    color: #fff;
+    text-decoration: none;
+    transition: background-color 0.3s ease-in-out, color 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+.main-card:hover {
+    background-color: #003866;
+    transform: scale(1.02);
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+/* If an ordered list appears within a paragraph, ensure proper spacing and indentation */
+p ol {
+  display: block;
+  list-style: none;
+  background-color: rgba(0, 0, 0, 0.09);
+  border-radius: 0.5em;
+  padding: 1em;
+  padding-left: 2em;
+  
+  
+}
+
+p ol li {
+  margin: 0.5em 0;    /* spacing between list items */
+  line-height: 1.5;
+}

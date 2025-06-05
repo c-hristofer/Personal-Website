@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hangman</title>
+    <link rel="stylesheet" href="../app/static/css/style.css">
+</head>
+
+
+<body>
+    <header>
+        <a href="index.html"><div class="logo">My Portfolio</div></a>
+    
+        <!-- Hamburger icon -->
+        <button class="menu-toggle" aria-label="Toggle navigation menu">
+          ☰
+        </button>
+    
+        <!-- Iframe for navigation -->
+        <iframe 
+          src="nav.html" 
+          id="nav-frame" 
+          title="Navigation Menu">
+        </iframe>
+    </header>
+
+    <main>
+        <div class="container">
+            <br>
+            <h1>Hangman Game</h1>
+            <div id="letters" class="letters hide"></div>
+            <div id="input-section"></div>
+            <canvas id="canvas"></canvas>
+            <div id="new-game-container" class="new-game-popup hide">
+                <div id="results"></div>
+                <button id="new-game-button">New Game</button>
+            </div>
+        </div>    
+    </main>
+
+    <script src="../app/static/js/hangman.js"></script>
+    <script src="../app/static/js/script.js"></script>
+</body>
+</html>

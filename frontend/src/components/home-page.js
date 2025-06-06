@@ -23,20 +23,16 @@ function HomePage() {
         <div>
           <h2>Main pages so far are:</h2>
 
-          <a href="../docs/christofer-piedra-cv.pdf" target="_blank" rel="noopener noreferrer" className="main-card">
-            Full CV
+          <a href="/flightpath" className="main-card">
+            FlightPath (Social Media Platform)
           </a>
 
           <a href="/fellowship-information" className="main-card">
             Summer Undergraduate Research Fellowship 2024
           </a>
 
-          <a href="/web-design-projects" className="main-card">
-            Web Design Projects
-          </a>
-
-          <a href="/smaller-projects" className="main-card">
-            Smaller Projects
+          <a href="../docs/christofer-piedra-cv.pdf" target="_blank" rel="noopener noreferrer" className="main-card">
+            Full CV
           </a>
         </div>
       </main>

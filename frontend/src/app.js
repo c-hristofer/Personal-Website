@@ -10,6 +10,8 @@ import WorkRelated from './components/work-related';
 import NotFound from './components/not-found';
 import RockPaperScissors from './components/rock-paper-scissors'
 import FellowshipInformation from './components/fellowship-information'
+import Flightpath from './components/flightpath';
+import CybersecurityProject from './components/cybersecurity-project';
 import './styles/style.css';
 
 function App() {
@@ -27,6 +29,8 @@ function App() {
             <Route path="/work-related" element={<WorkRelated />} />
             <Route path="/rock-paper-scissors" element={<RockPaperScissors />} />
             <Route path="/fellowship-information" element={<FellowshipInformation />} />
+            <Route path="/flightpath" element={<Flightpath />} />
+            <Route path="/cybersecurity-project" element={<CybersecurityProject />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>

@@ -9,13 +9,14 @@ function WebDesignProjects() {
         <br />
         <h1>Web Design Projects</h1>
         <p>
-          Below you will find the projects I've been making. They range from simple things like a calculator or to-do list, to complex things like a mock Amazon website. Have fun looking around!
+        This page showcases the web apps I’ve designed and developed, with a focus on functionality, user experience, and clean interface design. Each project highlights a unique solution to real-world problems, from student networking platforms like FlightPath to interactive tools used in my research group.
         </p>
 
         <div>
-          <a href="/rock-paper-scissors" className="main-card">
-            <strong>Rock Paper Scissors</strong>
-            A game of Rock, Paper, Scissors using html, css, and inline JavaScript
+          <a href="/flightpath" className="main-card">
+            <strong>FlightPath</strong>
+            <br />
+            A social media platform that helps university students connect with other students, professors, and businesses through job listings, clubs, events, messaging, and real-time updates, while also supporting career planning with tools like a resume builder.
           </a>
         </div>
       </main>

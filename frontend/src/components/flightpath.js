@@ -1,8 +1,8 @@
-import React from 'react';
+import React from 'react'
 import { useState } from 'react';
 import '../styles/style.css';
 
-function Flightpath() {
+function FlightPath() {
   const [showToc, setShowToc] = useState(false);
   return (
     <>
@@ -38,7 +38,12 @@ function Flightpath() {
         )}
         <section id="intro-pgh" className="flightpath-section">
           <h1>FlightPath</h1>
-          <p>FlightPath is my Senior Design Project (August–December 2025) at FAU, where I serve as Team Lead. We’re building a full-stack web application to connect students, faculty, and local businesses. Although the official timeline runs from August to December 2025, I’m getting an early head start to ensure a solid foundation. We are currently using Firebase for our database; after the fall semester starts, we plan to migrate everything to AWS (DynamoDB, S3, Cognito).</p>
+          <p>
+            FlightPath is my Senior Design Project (August–December 2025) at FAU, where I serve as Team Lead. We’re building a full-stack web application to connect students, faculty, and local businesses. Although the official timeline runs from August to December 2025, I’m getting an early head start to ensure a solid foundation. We are currently using Firebase for our database; after the fall semester starts, we plan to migrate everything to AWS (DynamoDB, S3, Cognito).
+            <br />
+            <br />
+            This page is meant to show the progress that has been made so far in FlightPath along with future plans. There is also a Table of Contents at the bottom right of this page to help navigate between the sections.
+          </p>
         </section>
 
         <section id="login-page" className='flightpath-section'>
@@ -51,17 +56,20 @@ function Flightpath() {
           alt="Photo of Login Page"
           />
           <br />
-          When a user navigates to FlightPath, they first see this Login Page. The form is centered inside a card with the FAU owl logo and top navigation bar. Students or businesses can enter their email/username and password to sign in. Key features already implemented with Firebase Authentication:</p>
+          When a user navigates to FlightPath, they first see this Login Page. The form is centered inside a card with the FAU owl logo and top navigation bar. Students or businesses can enter their email/username and password to sign in.
+          <br />
+          <br />
+          Key features already implemented with Firebase Authentication:</p>
           <ul>
             <li>Responsive layout with a centered form card.</li>
             <li>Email/password login using Firebase Auth.</li>
             <li>Links to “Forgot Password” and “Sign Up” pages.</li>
+            <li>Client-side error handling for invalid credentials and locked accounts.</li>
           </ul>
           <p>Work still in progress:</p>
           <ul>
             <li>University SSO integration (FAU OAuth2) for direct campus login.</li>
             <li>Social login buttons (e.g., Google SSO).</li>
-            <li>Client-side error handling for invalid credentials and locked accounts.</li>
           </ul>
         </section>
 
@@ -75,11 +83,16 @@ function Flightpath() {
           alt="Photo of Forgot Password Page"
           />
           <br />
-          If a user forgets their password, they click “Forgot Password” and see this page. It contains a single input for the user’s email and a “Send Reset Email” button. We’ve connected this to Firebase’s <code>sendPasswordResetEmail(...)</code> method.</p>
-          <p>Work still in progress:</p>
+          If a user forgets their password, they click “Forgot Password” and see this page. It contains a single input for the user’s email and a “Send Reset Email” button. We’ve connected this to Firebase’s <code>sendPasswordResetEmail(...)</code> method.
+          <br />
+          <br />
+          Key features already implemented with Firebase Authentication:</p>
           <ul>
             <li>Display a confirmation message or redirect after the reset email is sent.</li>
             <li>Client-side validation (ensure proper email format).</li>
+          </ul>
+          <p>Work still in progress:</p>
+          <ul>
             <li>Rate-limiting or CAPTCHA to prevent abuse.</li>
           </ul>
         </section>
@@ -94,21 +107,24 @@ function Flightpath() {
           alt="Photo of Student Account Creation Page"
           />
           <br />
-          New students create an account with this form. Eventually, we will use FAU SSO to auto-import student details. For now, it is a standard form that writes to Firestore under <code>users/students/{'{uid}'}</code>. Fields include:</p>
+          New students create an account with this form. Eventually, we will use FAU SSO to auto-import certain student details. For now, it is a standard form that writes to Firestore under <code>users/students/{'{uid}'}</code>.
+          <br />
+          <br />
+          Fields include:</p>
           <ul>
-            <li>Email, Password, Confirm Password</li>
-            <li>Student Name (auto-import placeholder for FAU SSO)</li>
+            <li>Real-time Firestore writes on “Create Account.”</li>
+            <li>Student Name, Email, Password, Confirm Password (auto-import placeholder for FAU SSO)</li>
             <li>Phone Number, About/Bio, Profile Image, Banner Image</li>
             <li>City, State dropdowns</li>
             <li>Links input (multiple URLs)</li>
             <li>College of Enrollment checkboxes (FAU colleges)</li>
             <li>Degrees, Graduation Year, Courses Taken (dynamic “+ Add” lists)</li>
+            <li>Skills (dynamic “+ Add” lists)</li>
+            <li>Error handling for duplicate emails or invalid inputs.</li>
           </ul>
           <p>Work still in progress:</p>
           <ul>
             <li>FAU SSO integration so the form auto-populates name, email, major.</li>
-            <li>Real-time Firestore writes on “Create Account.”</li>
-            <li>Error handling for duplicate emails or invalid inputs.</li>
             <li>Progressive disclosure to hide optional fields until later.</li>
           </ul>
         </section>
@@ -123,23 +139,24 @@ function Flightpath() {
           alt="Photo of Student Profile Page"
           />
           <br />
-          After signing in, students land on their Profile Page. All data is pulled in real time from Firestore under <code>users/students/{'{uid}'}</code> and related subcollections. Displayed information includes:</p>
+          After signing in, students land on their Profile Page. All data is pulled in real time from Firestore under <code>users/students/{'{uid}'}</code> and related subcollections.
+          <br />
+          <br />
+          Displayed information includes:</p>
           <ul>
-            <li>Header banner and avatar image uploaded to Firebase Storage.</li>
+            <li>Header banner and avatar image.</li>
             <li>Name, education summary, campus, location, email, joined date.</li>
             <li><strong>Create Resume</strong> button (opens Resume Generation screen).</li>
-            <li>About section (editable short bio).</li>
-            <li>Experience section with cards for each job/internship.</li>
-            <li>Education section listing degrees, majors, minors, colleges.</li>
-            <li>Skills section (each skill displayed as a pill).</li>
-            <li>Links section (URLs displayed as clickable chips).</li>
-            <li>Courses taken (displayed as pills).</li>
+            <li>Editable about section.</li>
+            <li>Editable experience section with cards for each job/internship.</li>
+            <li>Editable education section listing degrees, majors, minors, colleges.</li>
+            <li>Editable skills section (each skill displayed as a pill), auto updated with skills added in experience section as well as skills section.</li>
+            <li>Editable links section (URLs displayed as clickable chips).</li>
+            <li>Editable courses taken (displayed as pills).</li>
             <li><strong>Sign Out</strong> button at the bottom.</li>
           </ul>
           <p>Work still in progress:</p>
           <ul>
-            <li>Improve layout for long lists (horizontal scrolling or collapsible lists for skills/links).</li>
-            <li>Add “Edit” buttons for each section to open a modal or inline editor.</li>
             <li>Implement <strong>Followers/Following</strong> pages so students can network.</li>
           </ul>
         </section>
@@ -154,21 +171,22 @@ function Flightpath() {
           alt="Photo of Student Account Settings Page"
           />
           <br />
-          Students can update all personal details here, with fields pre-populated from Firestore. Features include:</p>
+          Students can update all personal details here, with fields pre-populated from Firestore.
+          <br />
+          <br />
+          Features include:</p>
           <ul>
-            <li>First Name, Last Name, Phone Number, Email (with “Change Email” flow).</li>
-            <li>Password update (behind a “Change Password” button).</li>
-            <li>Avatar & Banner image file inputs (uploads to Firebase Storage).</li>
-            <li>City & State dropdowns (writes back to Firestore on “Save Changes”).</li>
-            <li>Account Visibility toggle (Public vs. Private).</li>
-            <li><strong>Switch to Private Account</strong>, <strong>Save Changes</strong>, and <strong>Delete Account</strong> buttons.</li>
+            <li>First Name, Last Name, Phone Number.</li>
+            <li>Firebase flow for updating email/password.</li>
+            <li>City field & State dropdown.</li>
+            <li><strong>Account Visibility</strong> toggle (Public vs. Private).</li>
+            <li><strong>Save Changes</strong> and <strong>Delete Account</strong> buttons.</li>
+            <li>Deletion flow removes all <code>users/students/{'{uid}'}</code> documents and subcollections.</li>
           </ul>
           <p>Work still in progress:</p>
           <ul>
-            <li>Implement Firebase re-authentication flow for updating email/password.</li>
-            <li>Deletion flow must cascade remove all <code>users/students/{'{uid}'}</code> documents and subcollections.</li>
+            <li>Header banner and avatar image uploaded to Firebase Storage (option not available on our free tier of firebase).</li>
             <li>Support for <strong>Professor & Admin</strong> roles to manage student profiles.</li>
-            <li>Add settings for <strong>Followers/Following</strong> (e.g., “Allow others to follow me”).</li>
           </ul>
         </section>
 
@@ -182,6 +200,7 @@ function Flightpath() {
           alt="Photo of Resume Generation Page"
           />
           <br />
+          </p>
           <div className="scrollable-container">
             <iframe
               className="scrollable-image"
@@ -190,8 +209,9 @@ function Flightpath() {
             />
           </div>
           <br />
-          
-          Students select which sections to include in a downloadable resume. All data (Skills, Experience, Education) is pulled from Firestore. Features so far:</p>
+          <p>
+          Students select which sections to include in a downloadable resume. Can also darag the sections around to adjust their order. All data (Skills, Experience, Education) is pulled from Firestore. Features so far:
+          </p>
           <ul>
             <li>Section toggles: <strong>Education</strong>, <strong>Experience</strong>, <strong>Skills</strong>.</li>
             <li><strong>Export to Word</strong> button generates a <code>.docx</code> file using a Node.js function (proof-of-concept attached as <code>Resume.docx</code>).</li>
@@ -200,8 +220,7 @@ function Flightpath() {
           <ul>
             <li>Apply proper formatting: bold headings, bullet lists, consistent fonts/sizes in the <code>.docx</code>.</li>
             <li>Add additional toggles for <strong>Projects</strong>, <strong>Honors & Awards</strong>, <strong>Certifications</strong>.</li>
-            <li>Create a <strong>PDF export</strong> option with styled layout.</li>
-            <li>Implement a <strong>live preview</strong> so students can see formatted resume before downloading.</li>
+            <li>Allow specific data points to be added within each section (ex. only adding certain work experiences).</li>
           </ul>
         </section>
 
@@ -217,10 +236,9 @@ function Flightpath() {
           <br />
           Businesses sign up with a similar form, writing to Firestore under <code>users/businesses/{'{uid}'}</code>. Current fields include:</p>
           <ul>
-            <li>Email, Password, Confirm Password.</li>
-            <li>Business Name (required).</li>
+            <li>Email, Password, Confirm Password, Business Name (required).</li>
             <li>Phone Number, About, Profile Image, Banner Image.</li>
-            <li>City & State dropdowns.</li>
+            <li>City field & State dropdown.</li>
             <li>Links input (multiple URLs).</li>
           </ul>
           <p>Work still in progress:</p>
@@ -244,13 +262,12 @@ function Flightpath() {
           <ul>
             <li>Banner & avatar (default if none uploaded).</li>
             <li>Business Name, Location, Email, Joined Date.</li>
-            <li><strong>Create Resume</strong> button placeholder (will be replaced with “Post Job” in the future).</li>
-            <li>About section, <strong>Links</strong> section.</li>
+            <li>Editable about and <strong>Links</strong> sections.</li>
             <li><strong>Sign Out</strong> button at the bottom.</li>
           </ul>
           <p>Work still in progress:</p>
           <ul>
-            <li>Replace “Create Resume” with a <strong>“Post a Job”</strong> button linking to a job-creation form.</li>
+            <li>Remove “Create Resume” button.</li>
             <li>Display <strong>Job Listings</strong> created by this business (from <code>jobs</code> collection).</li>
             <li>Build a <strong>Business Insights</strong> dashboard for application metrics.</li>
           </ul>
@@ -268,13 +285,13 @@ function Flightpath() {
           Businesses can edit their profile details here, pulling data from Firestore:</p>
           <ul>
             <li>Business Name, Phone Number, Email (with “Edit Email” flow).</li>
-            <li>Change Password button (handled via Firebase Auth).</li>
-            <li>Avatar & Banner Image file inputs (upload to Firebase Storage).</li>
-            <li>City, State, Account Visibility toggle.</li>
-            <li><strong>Switch to Private Account</strong>, <strong>Save Changes</strong>, and <strong>Delete Account</strong>.</li>
+            <li>Change Password button (handled via Firebase Auth via "Edit Password" flow).</li>
+            <li>City, State fields</li>
+            <li><strong>Account Visibility</strong> toggle, <strong>Save Changes</strong> button, and <strong>Delete Account</strong> button.</li>
           </ul>
           <p>Work still in progress:</p>
           <ul>
+            <li>Header banner and avatar image uploaded to Firebase Storage (option not available on our free tier of firebase).</li>
             <li>Add <strong>Industry</strong> selection once field is available.</li>
             <li>Rich-text editor for the <strong>About</strong> section (formatting, bullet points).</li>
             <li>Allow multiple <strong>Administrators</strong> to manage a business account.</li>
@@ -291,12 +308,20 @@ function Flightpath() {
           alt="Photo of Home Page"
           />
           <br />
-          The “Home” tab displays a feed of posts from Firestore (<code>posts</code> collection). Each post card shows:</p>
+          The “Home” tab displays a feed of posts and job listings from Firestore (<code>posts</code> collection). Job listings are clickable to view entire job posting, and posts are clickable to view poster's account.
+          <br />
+          <br />
+          Each post card shows:</p>
           <ul>
-            <li>Poster’s avatar & name (currently hardcoded as “MattWhite” in the screenshot).</li>
-            <li>Banner image (e.g., FAU campus photo).</li>
-            <li>Post text content.</li>
+            <li>Poster’s avatar & name.</li>
+            <li>Post text and image content.</li>
             <li>Post footer with timestamp, like/comment/repost/share icons, and counts (e.g., “0 likes · 1 comment · 0 reposts”).</li>
+          </ul>
+          <p> Each job listing card (hard coded) shows:</p>
+          <ul>
+            <li>Job title.</li>
+            <li>Job description.</li>
+            <li>Company, location, expected salary, start date.</li>
           </ul>
           <p>Like, comment, repost, and share functionality is already built in using Firestore subcollections (<code>posts/{'{postId}'}/likes</code>, <code>comments</code>, etc.) and real-time listeners.</p>
           <p>Work still in progress:</p>
@@ -305,6 +330,7 @@ function Flightpath() {
             <li>Implement <strong>infinite scroll</strong> or pagination for large numbers of posts.</li>
             <li>Add <strong>post filters</strong> (Newest, Most Liked, Clubs, Jobs, Announcements).</li>
             <li>Enable <strong>user mentions</strong> (e.g., @AliceNguyen) and <strong>hashtags</strong> (#FAULab).</li>
+            <li>Event creation flow linking from Screen 8.</li>
           </ul>
         </section>
 
@@ -318,12 +344,15 @@ function Flightpath() {
           alt="Photo of Clubs, Events, & Groups Page"
           />
           <br />
-          Under the “Network” tab, this page shows cards for various clubs, events, and groups. Each card contains:</p>
+          Under the “Network” tab, this page shows cards for various clubs, events, and groups (hardcoded).
+          <br />
+          <br />
+          Each card contains:</p>
           <ul>
             <li>Title (e.g., “Cybersecurity Lab Meeting”).</li>
             <li>Description text for what the club/event does.</li>
-            <li>Grey info box with date, time, recurrence, location, and attendee/member count.</li>
-            <li>“Join” button on group pages.</li>
+            <li>Grey info box with date, time, frequency, location, and attendee/member count.</li>
+            <li>“Join” button on groups, clubs, events not joined (right side of screen).</li>
           </ul>
           <p>Current implementation uses hardcoded data. Planned work:</p>
           <ul>
@@ -345,10 +374,10 @@ function Flightpath() {
           alt="Photo of Messaging Page"
           />
           <br />
-          Under the “Messaging” tab, we have a two-column chat interface:</p>
+          Under the “Messaging” tab, we have a two-column chat interface (hardcoded):</p>
           <ul>
             <li><strong>Left column</strong>: lists recent conversations (e.g., James Varol, Alexis Dominic), showing avatar, last message snippet, and relative timestamp.</li>
-            <li><strong>Right column</strong>: displays the selected conversation with message bubbles and timestamps. Input bar at bottom for new messages (emoji, attachments, send icon).</li>
+            <li><strong>Right column</strong>: displays the selected conversation with message bubbles and timestamps. Input bar at bottom for new messages (emoji, camera, attachments, send icon).</li>
           </ul>
           <p>Current data is static/mock. Planned work:</p>
           <ul>
@@ -401,12 +430,12 @@ function Flightpath() {
           <br />
           Under the “Notifications” tab, users see a list of notifications with icons and timestamps:</p>
           <ul>
-            <li><strong>Like</strong> (red heart icon) – e.g., “Intracoastal Brewing Co. liked your post”</li>
-            <li><strong>Comment</strong> (green chat bubble icon) – e.g., “Alice Nguyen commented on your post”</li>
-            <li><strong>New Follower</strong> (blue person-add icon) – e.g., “Behnaz Ghoraani started following you”</li>
-            <li><strong>Event Reminder</strong> (blue calendar icon) – e.g., “Cybersecurity Lab Meeting starts in 30 minutes”</li>
-            <li><strong>System Alert</strong> (yellow bell icon) – e.g., “System maintenance scheduled April 25, 2025 at 2:00 AM”</li>
-            <li><strong>Security Warning</strong> (red exclamation icon) – e.g., “Your password will expire in 3 days”</li>
+            <li><strong>Like</strong> (red heart icon)</li>
+            <li><strong>Comment</strong> (green chat bubble icon)</li>
+            <li><strong>New Follower</strong> (blue person-add icon)</li>
+            <li><strong>Event Reminder</strong> (blue calendar icon)</li>
+            <li><strong>System Alert</strong> (yellow bell icon)</li>
+            <li><strong>Security Warning</strong> (red exclamation icon)</li>
           </ul>
           <p>Current data is static/mock. Planned work:</p>
           <ul>
@@ -439,8 +468,8 @@ function Flightpath() {
             <li>Implement full-text search for partial keyword matches and ranking (e.g., “sec” returns “Cybersecurity Lab Meeting”).</li>
             <li>Debounce input (300ms delay) to avoid excessive backend queries.</li>
             <li>Category-specific queries: search only <code>users</code> where <code>role == "professor"</code> for “Professors,” etc.</li>
-            <li>Result highlighting and auto-complete suggestions.</li>
             <li>Mobile responsiveness: collapse category pills into a dropdown and show results in a full-screen modal.</li>
+            <li>Possibly result highlighting and auto-complete suggestions.</li>
           </ul>
         </section>
 
@@ -453,6 +482,7 @@ function Flightpath() {
             <li>Ensure each UI screen (1–10) is fully CRUD-connected to Firebase before switching to AWS.</li>
             <li>Add <strong>Followers/Following</strong> pages for all account types (student, business, professor, admin).</li>
             <li>Testing & QA: unit tests and end-to-end tests for sign-up, posting, chatting, notifications, search.</li>
+            <li>Cybersecurity considerations implemented</li>
           </ul>
           <p>By December 2025, we aim to have FlightPath fully deployed on AWS: React front-end hosted on S3/CloudFront, DynamoDB for data, Cognito for auth, and Lambda functions powering business logic. This will give FAU students, faculty, and local businesses a robust platform to network, collaborate, and grow their careers.</p>
         </section>
@@ -461,4 +491,4 @@ function Flightpath() {
   );
 }
 
-export default Flightpath;
+export default FlightPath;

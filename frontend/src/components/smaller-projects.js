@@ -1,7 +1,7 @@
 import React from 'react';
 import '../styles/style.css';
 
-function Projects() {
+function SmallerProjects() {
   return (
     <>
 

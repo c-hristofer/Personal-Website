@@ -7,10 +7,9 @@ import SmallerProjects from './components/smaller-projects';
 import Projects from './components/web-design-projects';
 import Reccomendations from './components/reccomendations';
 import WorkRelated from './components/work-related';
-import NotFound from './components/not-found';
 import RockPaperScissors from './components/rock-paper-scissors'
 import FellowshipInformation from './components/fellowship-information'
-import Flightpath from './components/flightpath';
+import FlightPath from './components/flightpath';
 import CybersecurityProject from './components/cybersecurity-project';
 import './styles/style.css';
 
@@ -29,9 +28,8 @@ function App() {
             <Route path="/work-related" element={<WorkRelated />} />
             <Route path="/rock-paper-scissors" element={<RockPaperScissors />} />
             <Route path="/fellowship-information" element={<FellowshipInformation />} />
-            <Route path="/flightpath" element={<Flightpath />} />
+            <Route path="/flightpath" element={<FlightPath />} />
             <Route path="/cybersecurity-project" element={<CybersecurityProject />} />
-            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       </div>

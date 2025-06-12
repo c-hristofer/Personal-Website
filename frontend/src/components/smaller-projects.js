@@ -14,9 +14,7 @@ function SmallerProjects() {
 
         <div>
           <a href="/rock-paper-scissors" className="main-card">
-            <strong>Rock Paper Scissors</strong>
-            <br />
-            A game of Rock, Paper, Scissors using html, css, and inline JavaScript
+            <strong>Rock Paper Scissors Game</strong>
           </a>
         </div>
       </main>

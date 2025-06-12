@@ -73,7 +73,7 @@ function RockPaperScissors() {
     setWins(0);
     setLosses(0);
     setTies(0);
-    setMessage(`Wins: 0\nLosses: 0\nTies: 0`);
+    setMessage(``);
   };
 
   return (
@@ -92,10 +92,11 @@ function RockPaperScissors() {
         <div className="score-buttons">
           <button onClick={resetScore}>Reset Score</button>
         </div>
-                <div className="message">
-          {message.split('\n').map((line, idx) => (
-            <p key={idx}>{line}</p>
-          ))}
+        <div className="score-display">
+          <p>Wins: {wins}</p>
+          <p>Losses: {losses}</p>
+          <p>Ties: {ties}</p>
+          <p>{message.split('\n')[0]}</p>
         </div>
       </main>
     </>

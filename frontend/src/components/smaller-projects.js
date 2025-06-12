@@ -1,4 +1,3 @@
-import React from 'react';
 import '../styles/style.css';
 
 function SmallerProjects() {
@@ -15,6 +14,18 @@ function SmallerProjects() {
         <div>
           <a href="/rock-paper-scissors" className="main-card">
             <strong>Rock Paper Scissors Game</strong>
+          </a>
+        </div>
+
+        <div>
+          <a href="/calculator" className="main-card">
+            <strong>Calculator App</strong>
+          </a>
+        </div>
+
+        <div>
+          <a href="/to-do-list" className="main-card">
+            <strong>To-Do List</strong>
           </a>
         </div>
       </main>

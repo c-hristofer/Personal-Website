@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Nav from './components/nav';
 import HomePage from './components/home-page';
@@ -11,6 +10,10 @@ import RockPaperScissors from './components/rock-paper-scissors'
 import FellowshipInformation from './components/fellowship-information'
 import FlightPath from './components/flightpath';
 import CybersecurityProject from './components/cybersecurity-project';
+import AmazonClone from './components/amazon-clone';
+import Calculator from './components/calculator';
+import ToDoList from './components/to-do-list';
+
 import './styles/style.css';
 
 function App() {
@@ -30,6 +33,9 @@ function App() {
             <Route path="/fellowship-information" element={<FellowshipInformation />} />
             <Route path="/flightpath" element={<FlightPath />} />
             <Route path="/cybersecurity-project" element={<CybersecurityProject />} />
+            <Route path="/amazon-clone" element={<AmazonClone />} />
+            <Route path="/calculator" element={<Calculator />} />
+            <Route path="/to-do-list" element={<ToDoList />} />
           </Routes>
         </div>
       </div>

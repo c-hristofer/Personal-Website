@@ -1,4 +1,3 @@
-import React from 'react';
 import '../styles/style.css';
 
 function WebDesignProjects() {
@@ -17,6 +16,14 @@ function WebDesignProjects() {
             <strong>FlightPath</strong>
             <br />
             A social media platform that helps university students connect with other students, professors, and businesses through job listings, clubs, events, messaging, and real-time updates, while also supporting career planning with tools like a resume builder.
+          </a>
+        </div>
+
+        <div>
+          <a href="/amazon-clone" className="main-card">
+            <strong>Amazon Clone</strong>
+            <br />
+            An amazon.com clone with certain functionality and a mock chckout process.
           </a>
         </div>
       </main>

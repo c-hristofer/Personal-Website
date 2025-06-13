@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import '../styles/style.css';
 
 function RockPaperScissors() {
@@ -10,6 +10,23 @@ function RockPaperScissors() {
   const handlePick = (choice) => {
     const randomNumber = Math.random();
     let roundMessage = '';
+
+/*
+Rock: 0 - 1/3
+        ties: 0 - 1/3
+        wins: 2/3 - 1
+        loses: 1/3 - 2/3
+
+Paper: 1/3 - 2/3
+        ties: 1/3 - 2/3
+        wins: 0 - 1/3
+        loses: 2/3 - 1
+
+Scissors: 2/3 - 1
+        ties: 2/3 - 1
+        wins: 1/3 - 2/3
+        loses: 0 - 1/3
+*/
 
     if (choice === 'rock') {
       if (randomNumber <= 1 / 3) {

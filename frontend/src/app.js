@@ -13,6 +13,7 @@ import CybersecurityProject from './components/cybersecurity-project';
 import AmazonClone from './components/amazon-clone';
 import Calculator from './components/calculator';
 import ToDoList from './components/to-do-list';
+import CoinFlip from './components/coin-flip';
 
 import './styles/style.css';
 
@@ -36,6 +37,7 @@ function App() {
             <Route path="/amazon-clone" element={<AmazonClone />} />
             <Route path="/calculator" element={<Calculator />} />
             <Route path="/to-do-list" element={<ToDoList />} />
+            <Route path="/coin-flip" element={<CoinFlip />} />
           </Routes>
         </div>
       </div>

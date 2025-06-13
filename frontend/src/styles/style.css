@@ -65,7 +65,7 @@ header {
 
 .logo {
     display: inline-flex;
-    max-height: 4rem;
+    max-height: clamp(1rem, 5vh, 4rem);
     width: auto;
     align-items: center;
     justify-content: center;

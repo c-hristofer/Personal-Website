@@ -12,7 +12,7 @@ function Nav() {
     <>
     <header>
         <a href="/">
-            <div className="logo">My Portfolio</div>
+            <img src="./icons/logo.png" alt="Profile Image" className="logo" />
         </a>
     
     {/* Hamburger button (fixed at top‐right) */}

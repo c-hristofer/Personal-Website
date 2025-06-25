@@ -17,7 +17,8 @@ function ToDoSignIn() {
   const handleSignIn = async (e) => {
     e.preventDefault();
     try {
-      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
+      const persistenceType = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+      await setPersistence(auth, persistenceType);
       await signInWithEmailAndPassword(auth, email, password);
       navigate('/to-do');
     } catch (error) {

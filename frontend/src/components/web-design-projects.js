@@ -20,6 +20,14 @@ function WebDesignProjects() {
         </div>
 
         <div>
+          <a href="/to-do-signin" className="main-card">
+            <strong>To-Do List</strong>
+            <br />
+            A secure reminder and recurring task dashboard that helps users manage daily and weekly responsibilities with Firebase-authenticated user accounts, collapsible views, past-due tracking, and real-time updates.
+          </a>
+        </div>
+
+        <div>
           <a href="/amazon-clone" className="main-card">
             <strong>Amazon Clone</strong>
             <br />

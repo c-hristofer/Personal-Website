@@ -24,12 +24,6 @@ function SmallerProjects() {
         </div>
 
         <div>
-          <a href="/to-do-list" className="main-card">
-            <strong>To-Do List</strong>
-          </a>
-        </div>
-
-        <div>
           <a href="/coin-flip" className="main-card">
             <strong>Coin Flip</strong>
           </a>

@@ -12,8 +12,9 @@ import FlightPath from './components/flightpath';
 import CybersecurityProject from './components/cybersecurity-project';
 import AmazonClone from './components/amazon-clone';
 import Calculator from './components/calculator';
-import ToDoList from './components/to-do-list';
 import CoinFlip from './components/coin-flip';
+import ToDo from './components/to-do';
+import ToDoSignIn from './components/to-do-signin'
 
 import './styles/style.css';
 
@@ -36,8 +37,9 @@ function App() {
             <Route path="/cybersecurity-project" element={<CybersecurityProject />} />
             <Route path="/amazon-clone" element={<AmazonClone />} />
             <Route path="/calculator" element={<Calculator />} />
-            <Route path="/to-do-list" element={<ToDoList />} />
             <Route path="/coin-flip" element={<CoinFlip />} />
+            <Route path="/to-do" element={<ToDo />} />
+            <Route path="/to-do-signin" element={<ToDoSignIn />} />
           </Routes>
         </div>
       </div>

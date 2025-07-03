@@ -1,16 +1,16 @@
 import '../styles/style.css';
 
-function MlProjects() {
+function AI() {
   return (
     <>
 
       <main>
         <br />
-        <h1>ML Projects</h1>
+        <h1>AI Projects</h1>
         <p>Here are the outcomes of my ML Projects with links to the Github Repos</p>
       </main>
     </>
   );
 }
 
-export default MlProjects;
+export default AI;

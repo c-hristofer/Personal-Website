@@ -79,8 +79,8 @@ function ToDoSignIn() {
           <p style={{ marginTop: '1em' }}>
             This page is part of a secure reminder and recurring task tracker. Once signed in, users can manage daily tasks, recurring habits, and past-due items — all tied to their private account in Firebase.
           </p>
-          <img src="/images/to-do/to-do-1.png" alt="To-Do Example 1" style={{ maxWidth: '100%', marginTop: '1em' }} />
-          <img src="/images/to-do/to-do-2.png" alt="To-Do Example 2" style={{ maxWidth: '100%', marginTop: '1em' }} />
+          <img src="/images/to_do/to-do-1.png" alt="To-Do Example 1" style={{ maxWidth: '100%', marginTop: '1em' }} />
+          <img src="/images/to_do/to-do-2.png" alt="To-Do Example 2" style={{ maxWidth: '100%', marginTop: '1em' }} />
         </div>
       )}
     </div>

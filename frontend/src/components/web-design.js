@@ -1,12 +1,12 @@
 import '../styles/style.css';
 
-function WebDesignProjects() {
+function WebDesign() {
   return (
     <>
 
       <main>
         <br />
-        <h1>Web Design Projects</h1>
+        <h1>Web Design</h1>
         <p>
         This page showcases the web apps I’ve designed and developed, with a focus on functionality, user experience, and clean interface design. Each project highlights a unique solution to real-world problems, from student networking platforms like FlightPath to interactive tools used in my research group.
         </p>
@@ -39,4 +39,4 @@ function WebDesignProjects() {
   );
 }
 
-export default WebDesignProjects;
+export default WebDesign;

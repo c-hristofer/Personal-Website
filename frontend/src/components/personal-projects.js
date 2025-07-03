@@ -1,6 +1,6 @@
 import '../styles/style.css';
 
-function SmallerProjects() {
+function PersonalProjects() {
   return (
     <>
 
@@ -33,4 +33,4 @@ function SmallerProjects() {
   );
 }
 
-export default SmallerProjects;
+export default PersonalProjects;

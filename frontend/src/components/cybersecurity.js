@@ -1,11 +1,11 @@
 import '../styles/style.css';
 
-function CybersecurityProject() {
+function Cybersecurity() {
   return (
     <>
 
       <main>
-        <h1>Cybersecurity Research & Projects</h1>
+        <h1>Cybersecurity Research</h1>
         <p>
           Over the past year, I have been engaged in developing and refining intrusion detection techniques using Zeek scripts as part of FAU’s Tecore Research Lab. My work focuses on detecting common network attacks—such as ARP poisoning, DDoS, and port scans—within IoT environments, optimizing detection thresholds, and reducing false positives. Collaborating with Dr. Imad Mahgoub and the research team, I have contributed to real-time alerting, log analysis, and automated reporting of anomalous network behavior.
         </p>
@@ -21,4 +21,4 @@ function CybersecurityProject() {
   );
 }
 
-export default CybersecurityProject;
+export default Cybersecurity;

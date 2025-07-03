@@ -1,20 +1,21 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Nav from './components/nav';
 import HomePage from './components/home-page';
-import MLProjects from './components/ml-projects';
-import SmallerProjects from './components/smaller-projects';
-import Projects from './components/web-design-projects';
+import AI from './components/ai';
+import PersonalProjects from './components/personal-projects';
+import WebDesign from './components/web-design';
 import Reccomendations from './components/reccomendations';
 import WorkRelated from './components/work-related';
 import RockPaperScissors from './components/rock-paper-scissors'
 import FellowshipInformation from './components/fellowship-information'
 import FlightPath from './components/flightpath';
-import CybersecurityProject from './components/cybersecurity-project';
+import Cybersecurity from './components/cybersecurity';
 import AmazonClone from './components/amazon-clone';
 import Calculator from './components/calculator';
 import CoinFlip from './components/coin-flip';
 import ToDo from './components/to-do';
 import ToDoSignIn from './components/to-do-signin'
+import WordleSolver from './components/wordle-solver'
 
 import './styles/style.css';
 
@@ -26,20 +27,21 @@ function App() {
         <div className="content">
           <Routes>
             <Route path="/" element={<HomePage />} />
-            <Route path="/ml-projects" element={<MLProjects />} />
-            <Route path="/smaller-projects" element={<SmallerProjects />} />
-            <Route path="/web-design-projects" element={<Projects />} />
+            <Route path="/ai" element={<AI />} />
+            <Route path="/personal-projects" element={<PersonalProjects />} />
+            <Route path="/web-design" element={<WebDesign />} />
             <Route path="/reccomendations" element={<Reccomendations />} />
             <Route path="/work-related" element={<WorkRelated />} />
             <Route path="/rock-paper-scissors" element={<RockPaperScissors />} />
             <Route path="/fellowship-information" element={<FellowshipInformation />} />
             <Route path="/flightpath" element={<FlightPath />} />
-            <Route path="/cybersecurity-project" element={<CybersecurityProject />} />
+            <Route path="/cybersecurity" element={<Cybersecurity />} />
             <Route path="/amazon-clone" element={<AmazonClone />} />
             <Route path="/calculator" element={<Calculator />} />
             <Route path="/coin-flip" element={<CoinFlip />} />
             <Route path="/to-do" element={<ToDo />} />
             <Route path="/to-do-signin" element={<ToDoSignIn />} />
+            <Route path="/wordle-solver" element={<WordleSolver />} />
           </Routes>
         </div>
       </div>

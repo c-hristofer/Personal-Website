@@ -200,6 +200,21 @@ function WordleSolver() {
     <div className="dashboard">
       {mode === 1 && (
         <div className="solver-container">
+          <p className="solver-description">
+            This tool helps you solve Wordle puzzles efficiently using entropy-based heuristics. Each guess updates based on the most informative word left from the solution set.
+          </p>
+          <details style={{ marginBottom: '1em' }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1em' }}>Instructions</summary>
+            <ul style={{ marginTop: '0.5em', paddingLeft: '1.5em', lineHeight: '1.6' }}>
+              <li>The solver starts with the word "salet" as the first guess.</li>
+              <li>Click on each tile to cycle through the feedback colors: gray (⬛), yellow (🟨), green (🟩).</li>
+              <li>Once you've set the feedback to match what Wordle gave you, click "Submit Feedback."</li>
+              <li>The solver will update the suggested next guess based on remaining possible words.</li>
+              <li>You have a total of 6 guesses to solve the puzzle.</li>
+              <li>Press "Reset" to start a new game at any time.</li>
+              <li>You can also press the "Enter" key as a shortcut for "Submit Feedback."</li>
+            </ul>
+          </details>
           <h1>Wordle Solver</h1>
           <p><b>Guess #{guessIndex1}:</b> {suggested1}</p>
           {renderGuessGrid(guesses1)}

@@ -6,10 +6,16 @@ function PersonalProjects() {
 
       <main>
         <br />
-        <h1>Smaller Projects</h1>
+        <h1>Personal Projects</h1>
         <p>
-            Below you will find the projects I've been making. They range from simple things like a calculator or to-do list, to complex things like a mock Amazon website. Have fun looking around!
+            Below you will find the projects I've been making. They range from simple things like a calculator or to-do list, to complex things like an entropy-based Wordle solver. Have fun looking around!
         </p>
+
+        <div>
+          <a href="/wordle-solver" className="main-card">
+            <strong>Wordle Solver</strong>
+          </a>
+        </div>
 
         <div>
           <a href="/rock-paper-scissors" className="main-card">

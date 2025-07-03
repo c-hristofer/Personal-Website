@@ -651,3 +651,61 @@ p ol li {
     justify-content: center;
     margin-top: 1rem;
 }
+
+
+
+.basketball-section {
+  background-color: #f9f9f9;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 0.5em;
+  padding: 1.5em 2em;
+  margin-bottom: 2em;
+  text-align: left;
+}
+
+.basketball-section h2 {
+  font-size: 1.8em;
+  margin-bottom: 0.5em;
+  color: #0056b3;
+  border-bottom: 2px solid #ffd700;
+  padding-bottom: 0.3em;
+  display: inline-block;
+}
+
+.basketball-section ul {
+  margin: 1.5em 0 1.5em 0;
+  padding-left: 1.5em;
+  list-style-type: disc;
+  color: #333;
+  line-height: 1.6;
+}
+.basketball-section ul li {
+  margin: 0.75em 0;
+  position: relative;
+}
+.basketball-section ul li::marker {
+  color: #0056b3;
+  font-size: 1.2em;
+  margin-right: 0.5em;
+}
+
+.basketball-section code {
+  background-color: rgba(0, 86, 179, 0.1);
+  color: #0056b3;
+  padding: 0.2em 0.4em;
+  border-radius: 0.25em;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.95em;
+}
+
+.basketball-section p ol {
+  margin: 1em 0 1em 2em;
+}
+.basketball-section p ol li,
+.basketball-section ul li {
+  background-color: rgba(0, 86, 179, 0.05);
+  padding: 0.5em;
+  border-radius: 0.25em;
+  margin: 0.5em 0;
+  list-style: none;
+}

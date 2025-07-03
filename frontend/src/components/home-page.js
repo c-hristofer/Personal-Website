@@ -20,7 +20,7 @@ function HomePage() {
         />
 
         <div>
-          <h2>Main pages so far are:</h2>
+          <h2>Main projects so far are:</h2>
 
           <a href="/flightpath" className="main-card">
             FlightPath (Social Media Platform)
@@ -30,8 +30,12 @@ function HomePage() {
             Summer Undergraduate Research Fellowship 2024
           </a>
 
-          <a href="../docs/christofer-piedra-cv.pdf" target="_blank" rel="noopener noreferrer" className="main-card">
-            Full CV
+          <a href="/basketball-predictor" target="_blank" rel="noopener noreferrer" className="main-card">
+            Neural Net and Random Forest Basketball Predictor
+          </a>
+
+          <a href="/wordle-solver" target="_blank" rel="noopener noreferrer" className="main-card">
+            Entropy-Based Wordle Solver
           </a>
         </div>
       </main>

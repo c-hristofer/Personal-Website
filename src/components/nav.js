@@ -32,9 +32,9 @@ function Nav() {
         <ul>
           <li><Link to="/" onClick={handleClose}>Home</Link></li>
           <li><Link to="/work-related" onClick={handleClose}>Work Related</Link></li>
-          <li><Link to="/web-design" onClick={handleClose}>Web Design</Link></li>
-          <li><Link to="/cybersecurity" onClick={handleClose}>Cybersecurity</Link></li>
-          <li><Link to="/ai" onClick={handleClose}>AI</Link></li>
+          <li><Link to="/web-design" onClick={handleClose}>Web Design Projects</Link></li>
+          <li><Link to="/cybersecurity" onClick={handleClose}>Cybersecurity Research</Link></li>
+          <li><Link to="/ai" onClick={handleClose}>AI Projects</Link></li>
           <li><Link to="/personal-projects" onClick={handleClose}>Personal Projects</Link></li>
         </ul>
       </nav>

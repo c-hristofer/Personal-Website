@@ -241,7 +241,7 @@ p ol li {
 }
 
 /* Section styling for FlightPath content */
-.flightpath-section {
+.flightpath-section, .makemore-section {
   background-color: #f9f9f9;
   border: 1px solid rgba(0, 0, 0, 0.05);
   border-radius: 0.5em;
@@ -251,7 +251,7 @@ p ol li {
 }
 
 /* Heading styles */
-.flightpath-section h2 {
+.flightpath-section h2, .makemore-section h2 {
   font-size: 1.8em;
   margin-bottom: 0.5em;
   color: #003866;
@@ -261,25 +261,25 @@ p ol li {
 }
 
 /* Enhanced list styling within sections */
-.flightpath-section ul {
+.flightpath-section ul, .makemore-section ul {
   margin: 1.5em 0 1.5em 0;
   padding-left: 1.5em;
   list-style-type: disc;
   color: #333;
   line-height: 1.6;
 }
-.flightpath-section ul li {
+.flightpath-section ul li, .makemore-section ul li {
   margin: 0.75em 0;
   position: relative;
 }
-.flightpath-section ul li::marker {
+.flightpath-section ul li::marker, .makemore-section ul li::marker {
   color: #0056b3;
   font-size: 1.2em;
   margin-right: 0.5em;
 }
 
 /* Code snippet styling */
-.flightpath-section code {
+.flightpath-section code, .makemore-section code {
   background-color: rgba(0, 86, 179, 0.1);
   color: #0056b3;
   padding: 0.2em 0.4em;
@@ -289,11 +289,13 @@ p ol li {
 }
 
 /* Enhance ordered lists inside paragraphs */
-.flightpath-section p ol {
+.flightpath-section p ol, .makemore-section p ol {
   margin: 1em 0 1em 2em;
 }
 .flightpath-section p ol li,
-.flightpath-section ul li {
+.flightpath-section ul li,
+.makemore-section p ol li,
+.makemore-section ul li {
   background-color: rgba(0, 86, 179, 0.05);
   padding: 0.5em;
   border-radius: 0.25em;
@@ -302,13 +304,13 @@ p ol li {
 }
 
 /* Improve overall typography */
-.flightpath-section h1 {
+.flightpath-section h1, .makemore-section h1 {
   font-size: 3em;
   color: #003866;
   margin-bottom: 0.2em;
 }
 
-.flightpath-section a:hover {
+.flightpath-section a:hover, .makemore-section a:hover {
   color: #003866;
 }
 

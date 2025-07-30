@@ -17,6 +17,7 @@ import ToDo from './components/to-do';
 import ToDoSignIn from './components/to-do-signin'
 import WordleSolver from './components/wordle-solver'
 import BasketballPredictor from './components/basketball-predictor'
+import Makemore from './components/makemore'
 
 import './styles/style.css';
 
@@ -44,6 +45,7 @@ function App() {
             <Route path="/to-do-signin" element={<ToDoSignIn />} />
             <Route path="/wordle-solver" element={<WordleSolver />} />
             <Route path="/basketball-predictor" element={<BasketballPredictor />} />
+            <Route path="/makemore" element={<Makemore />} />
           </Routes>
         </div>
       </div>

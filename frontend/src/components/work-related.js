@@ -9,7 +9,7 @@ function WorkRelated() {
         <h1>Work Related</h1>
         <p>Here are some highlights of my career, feel free to click on anything to learn more.</p>
         <p>
-          <a className="main-card" href="../docs/christofer-piedra-cv.pdf" target="_blank" rel="noopener noreferrer">
+          <a className="main-card" href="../docs/Christofer_Piedra_CV.pdf" target="_blank" rel="noopener noreferrer">
             <strong>CV</strong>
           </a>
         </p>

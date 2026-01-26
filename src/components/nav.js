@@ -16,7 +16,6 @@ function Nav() {
             <img src="./icons/logo.png" alt="Profile Image" className="logo" />
         </a>
         <div className="header-actions">
-          <ThemeToggle />
           {/* Hamburger button (fixed at top‐right) */}
           <button
             className="menu-toggle"
@@ -25,7 +24,7 @@ function Nav() {
             aria-controls="primary-navigation"
             onClick={handleOpen}
           >
-            ☰
+            <span className="menu-icon" aria-hidden="true">☰</span>
           </button>
         </div>
       </header>
@@ -38,6 +37,10 @@ function Nav() {
         <button className="close-btn" aria-label="Close navigation menu" onClick={handleClose}>
           ✕
         </button>
+        <div className="nav-theme" role="region" aria-label="Theme selection">
+          <p className="nav-theme__label">Appearance</p>
+          <ThemeToggle />
+        </div>
         <ul>
           <li><Link to="/" onClick={handleClose}>Home</Link></li>
           <li><Link to="/work-related" onClick={handleClose}>Work Related</Link></li>

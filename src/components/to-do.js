@@ -280,7 +280,11 @@ function ToDo() {
                 {r.title} {r.time && `@ ${formatTime(r.time)}`} on {r.days.join(', ')}
                 <button
                   onClick={() => deleteRecurringReminder(r.id)}
-                  style={{ marginLeft: '1em', backgroundColor: '#d9534f', color: 'white' }}
+                  style={{
+                    marginLeft: '1em',
+                    backgroundColor: 'var(--color-danger)',
+                    color: 'var(--color-primary-contrast)'
+                  }}
                 >
                   Delete
                 </button>
@@ -314,7 +318,16 @@ function ToDo() {
       </div>
       <div className="section">
         <button onClick={handleSignOut}>Sign Out</button>
-        <button onClick={handleDeleteAccount} style={{ marginLeft: '1em', backgroundColor: '#d9534f' }}>Delete Account</button>
+        <button
+          onClick={handleDeleteAccount}
+          style={{
+            marginLeft: '1em',
+            backgroundColor: 'var(--color-danger)',
+            color: 'var(--color-primary-contrast)'
+          }}
+        >
+          Delete Account
+        </button>
       </div>
     </div>
   );

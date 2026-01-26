@@ -3,20 +3,40 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="./icons/logo.png">
-
-    <!-- Sets logo when accessed from home screen shortcut on ios device --> 
-    <link rel="apple-touch-icon" href="./icons/logo.png">
-
-    <!-- Makes app full screen when accessed from a home screen shortcut on ios device --> 
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="./icons/logo.png" />
+    <!-- Sets logo when accessed from home screen shortcut on ios device -->
+    <link rel="apple-touch-icon" href="./icons/logo.png" />
+    <!-- Makes app full screen when accessed from a home screen shortcut on ios device -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    
-</head>
     <title>Christofer Piedra's Website</title>
+    <script>
+      (function () {
+        var storageKey = 'theme-preference';
+        var root = document.documentElement;
+        var mediaQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+        var preference = 'system';
+
+        try {
+          var stored = localStorage.getItem(storageKey);
+          if (stored === 'light' || stored === 'dark' || stored === 'system') {
+            preference = stored;
+          }
+        } catch (error) {
+          preference = 'system';
+        }
+
+        var resolved = preference === 'system'
+          ? ((mediaQuery && mediaQuery.matches) ? 'dark' : 'light')
+          : preference;
+        root.dataset.theme = resolved;
+        root.dataset.themeSource = preference;
+        root.style.colorScheme = resolved;
+      })();
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this application.</noscript>
     <div id="root"></div>
-
   </body>
 </html>

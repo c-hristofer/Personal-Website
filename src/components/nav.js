@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import ThemeToggle from './theme-toggle';
 import '../styles/style.css';
 
 function Nav() {
@@ -11,21 +12,29 @@ function Nav() {
   return (
     <>
     <header>
-        <a href="/">
+        <a href="/" aria-label="Home">
             <img src="./icons/logo.png" alt="Profile Image" className="logo" />
         </a>
-    
-    {/* Hamburger button (fixed at top‐right) */}
-    <button
-        className="menu-toggle"
-        aria-label="Toggle navigation menu"
-        onClick={handleOpen}
-    >
-        ☰
-    </button>
+        <div className="header-actions">
+          <ThemeToggle />
+          {/* Hamburger button (fixed at top‐right) */}
+          <button
+            className="menu-toggle"
+            aria-label="Toggle navigation menu"
+            aria-expanded={isOpen}
+            aria-controls="primary-navigation"
+            onClick={handleOpen}
+          >
+            ☰
+          </button>
+        </div>
       </header>
       {/* Full‐screen nav overlay */}
-      <nav className={`nav-menu${isOpen ? ' open' : ''}`}>
+      <nav
+        id="primary-navigation"
+        className={`nav-menu${isOpen ? ' open' : ''}`}
+        aria-hidden={!isOpen}
+      >
         <button className="close-btn" aria-label="Close navigation menu" onClick={handleClose}>
           ✕
         </button>

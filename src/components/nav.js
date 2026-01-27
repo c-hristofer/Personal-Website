@@ -13,7 +13,7 @@ function Nav() {
     <>
     <header>
         <a href="/" aria-label="Home">
-            <img src="./icons/logo.png" alt="Profile Image" className="logo" />
+            <img src="/icons/logo.png" alt="Site logo" className="logo" />
         </a>
         <div className="header-actions">
           {/* Hamburger button (fixed at top‐right) */}

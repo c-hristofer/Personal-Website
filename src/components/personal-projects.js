@@ -12,6 +12,12 @@ function PersonalProjects() {
         </p>
 
         <div>
+          <a href="/projects/workout" className="main-card">
+            <strong>Workout Planner &amp; Tracker</strong>
+          </a>
+        </div>
+
+        <div>
           <a href="/wordle-solver" className="main-card">
             <strong>Wordle Solver</strong>
           </a>
@@ -34,6 +40,7 @@ function PersonalProjects() {
             <strong>Coin Flip</strong>
           </a>
         </div>
+
       </main>
     </>
   );

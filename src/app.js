@@ -18,6 +18,9 @@ import ToDoSignIn from './components/to-do-signin'
 import WordleSolver from './components/wordle-solver'
 import BasketballPredictor from './components/basketball-predictor'
 import Makemore from './components/makemore'
+import WorkoutHub from './components/workout/workout-hub';
+import WorkoutSettings from './components/workout/workout-settings';
+import WorkoutData from './components/workout/workout-data';
 
 import './styles/style.css';
 
@@ -46,6 +49,9 @@ function App() {
             <Route path="/wordle-solver" element={<WordleSolver />} />
             <Route path="/basketball-predictor" element={<BasketballPredictor />} />
             <Route path="/makemore" element={<Makemore />} />
+            <Route path="/projects/workout" element={<WorkoutHub />} />
+            <Route path="/projects/workout/settings" element={<WorkoutSettings />} />
+            <Route path="/projects/workout/data" element={<WorkoutData />} />
           </Routes>
         </div>
       </div>

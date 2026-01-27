@@ -37,6 +37,10 @@ function HomePage() {
           <a href="/wordle-solver" target="_blank" rel="noopener noreferrer" className="main-card">
             Entropy-Based Wordle Solver
           </a>
+
+          <a href="/projects/workout" className="main-card">
+            Workout Planner &amp; Tracker
+          </a>
         </div>
       </main>
     </>

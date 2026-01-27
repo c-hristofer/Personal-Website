@@ -34,7 +34,7 @@ function ToDo() {
   const [newRecurring, setNewRecurring] = useState("");
   const [selectedDays, setSelectedDays] = useState([]);
   // Collapsible section state variables
-  const [showNewReminder, setShowNewReminder] = useState(false);
+  const [showNewReminder, setShowNewReminder] = useState(true);
   const [showRecurring, setShowRecurring] = useState(false);
   const [showWeekly, setShowWeekly] = useState(true);
   const [showPastDue, setShowPastDue] = useState(true);

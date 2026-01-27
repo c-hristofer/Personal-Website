@@ -31,3 +31,44 @@ Add new components by referencing variables instead of hard-coding colors (e.g.,
 3. Use the semantic tokens for borders, cards, and shadows (`var(--shadow-1)` or `var(--shadow-2)`).
 4. Prefer `currentColor` for SVG/icon fills; otherwise, add both light & dark asset variants or tint via CSS filters similar to the logo approach.
 5. When adding animations or transitions, wrap them in `@media (prefers-reduced-motion: reduce)` guards like the existing pattern.
+
+## Workout module data model
+The Workout dashboard stores all user data inside Firestore under `/users/{uid}`:
+
+```
+/users/{uid}/workoutPlan/plan
+  days: { monday: [{ id, name, sets, reps }, ...], ... }
+  dayNames: { monday: "Chest & Tris", ... } // Friendly labels shown on dashboard
+  updatedAt: ISO string
+
+/users/{uid}/workoutWeights/{dayKey}
+  dayKey: "monday"…"sunday"
+  exercises: {
+    [exerciseId]: {
+      setWeights: number[] | null[],
+      updatedAt: ISO string
+    }
+  }
+
+/users/{uid}/workoutCompletions/{weekId}
+  weekStartISO: Monday start in America/New_York (YYYY-MM-DD)
+  dayData: {
+    monday: {
+      exercises: {
+        [exerciseId]: {
+          completed: boolean,
+          completedSets: boolean[],
+          updatedAt: ISO string
+        }
+      }
+    }
+  }
+
+/users/{uid}/workoutSettings/settings
+  unitSystem: "lbs" | "kg"
+  defaultDayView: "today" | "last"
+  lastSelectedDay: dayKey
+  updatedAt: ISO string
+```
+
+Weights and plan info persist across weeks. Completion documents are keyed by `weekId` (NYC Monday start) so the UI naturally resets checkmarks every Monday at 12:00 AM America/New_York without clearing the plan or weights.

@@ -12,11 +12,21 @@ const listeners = new Set();
 const safeWindow = () => (typeof window === 'undefined' ? undefined : window);
 const safeDocument = () => (typeof document === 'undefined' ? undefined : document);
 
-const readStoredPreference = () => {
+const getStorage = () => {
   const win = safeWindow();
-  if (!win) return 'system';
+  if (!win) return null;
   try {
-    const value = win.localStorage.getItem(STORAGE_KEY);
+    return win.localStorage;
+  } catch (error) {
+    return null;
+  }
+};
+
+const readStoredPreference = () => {
+  try {
+    const storage = getStorage();
+    if (!storage) return 'system';
+    const value = storage.getItem(STORAGE_KEY);
     return VALID_PREFERENCES.has(value) ? value : 'system';
   } catch (error) {
     return 'system';
@@ -24,10 +34,10 @@ const readStoredPreference = () => {
 };
 
 const persistPreference = (mode) => {
-  const win = safeWindow();
-  if (!win) return;
   try {
-    win.localStorage.setItem(STORAGE_KEY, mode);
+    const storage = getStorage();
+    if (!storage) return;
+    storage.setItem(STORAGE_KEY, mode);
   } catch (error) {
     // Ignore storage failures (private browsing, etc.)
   }

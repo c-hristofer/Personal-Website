@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, browserLocalPersistence, browserSessionPersistence, setPersistence } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getStoredRememberMe, persistRememberMe } from '../utils/remember-me';
+import { applyPersistencePreference } from '../utils/auth-persistence';
 
 function ToDoSignIn() {
   const [email, setEmail] = useState('');
@@ -15,11 +16,23 @@ function ToDoSignIn() {
   const navigate = useNavigate();
   const auth = getAuth();
 
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        navigate('/to-do');
+      }
+    });
+    return () => unsubscribe();
+  }, [auth, navigate]);
+
   const handleSignIn = async (e) => {
     e.preventDefault();
     try {
-      const persistenceType = rememberMe ? browserLocalPersistence : browserSessionPersistence;
-      await setPersistence(auth, persistenceType);
+      const applied = await applyPersistencePreference(auth, rememberMe ? 'local' : 'session');
+      if (applied !== 'local' && rememberMe) {
+        setRememberMe(false);
+        persistRememberMe(false);
+      }
       await signInWithEmailAndPassword(auth, email, password);
       navigate('/to-do');
     } catch (error) {
@@ -34,6 +47,11 @@ function ToDoSignIn() {
       return;
     }
     try {
+      const applied = await applyPersistencePreference(auth, rememberMe ? 'local' : 'session');
+      if (applied !== 'local' && rememberMe) {
+        setRememberMe(false);
+        persistRememberMe(false);
+      }
       await createUserWithEmailAndPassword(auth, newEmail, newPassword);
       alert('Account created successfully!');
     } catch (error) {
@@ -84,8 +102,8 @@ function ToDoSignIn() {
           <p style={{ marginTop: '1em' }}>
             This page is part of a secure reminder and recurring task tracker. Once signed in, users can manage daily tasks, recurring habits, and past-due items — all tied to their private account in Firebase.
           </p>
-          <img src="/images/to-do/to-do-1.png" alt="To-Do Example 1" style={{ maxWidth: '100%', marginTop: '1em' }} />
-          <img src="/images/to-do/to-do-2.png" alt="To-Do Example 2" style={{ maxWidth: '100%', marginTop: '1em' }} />
+          <img src="./images/to-do/to-do-1.png" alt="To-Do Example 1" style={{ maxWidth: '100%', marginTop: '1em' }} />
+          <img src="./images/to-do/to-do-2.png" alt="To-Do Example 2" style={{ maxWidth: '100%', marginTop: '1em' }} />
         </div>
       )}
     </div>

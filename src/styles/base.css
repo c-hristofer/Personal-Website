@@ -94,15 +94,15 @@ button {
   cursor: pointer;
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-sm);
-  background-color: var(--color-primary);
-  color: var(--color-primary-contrast);
+  background-color: var(--color-primary, #1f6feb);
+  color: var(--color-primary-contrast, #ffffff);
   font-weight: var(--fw-medium);
   box-shadow: var(--shadow-1);
   transition: background-color var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
 }
 
 button:hover:not(:disabled) {
-  background-color: var(--color-primary-strong);
+  background-color: var(--color-primary-strong, #144a9c);
   transform: translateY(-1px);
   box-shadow: var(--shadow-2);
 }

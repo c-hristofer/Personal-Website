@@ -2,13 +2,23 @@ const STORAGE_KEY = 'auth-remember-me';
 
 const safeWindow = () => (typeof window === 'undefined' ? undefined : window);
 
-export const getStoredRememberMe = () => {
+const getStorage = () => {
   const win = safeWindow();
-  if (!win) {
+  if (!win) return null;
+  try {
+    return win.localStorage;
+  } catch (error) {
+    return null;
+  }
+};
+
+export const getStoredRememberMe = () => {
+  const storage = getStorage();
+  if (!storage) {
     return false;
   }
   try {
-    const raw = win.localStorage.getItem(STORAGE_KEY);
+    const raw = storage.getItem(STORAGE_KEY);
     return raw === 'true';
   } catch (error) {
     return false;
@@ -16,12 +26,12 @@ export const getStoredRememberMe = () => {
 };
 
 export const persistRememberMe = (value) => {
-  const win = safeWindow();
-  if (!win) {
+  const storage = getStorage();
+  if (!storage) {
     return;
   }
   try {
-    win.localStorage.setItem(STORAGE_KEY, value ? 'true' : 'false');
+    storage.setItem(STORAGE_KEY, value ? 'true' : 'false');
   } catch (error) {
     // Ignore storage failures (private mode, etc.)
   }

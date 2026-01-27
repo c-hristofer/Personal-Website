@@ -1,6 +1,11 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import {
+    browserLocalPersistence,
+    browserSessionPersistence,
+    initializeAuth,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStoredRememberMe } from "./utils/remember-me";
 
 // Firebase config using environment variables
 const firebaseConfig = {
@@ -21,7 +26,19 @@ for (const [key, value] of Object.entries(firebaseConfig)) {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+
+let auth;
+const preferLocal = getStoredRememberMe();
+try {
+    auth = initializeAuth(app, {
+        persistence: preferLocal ? browserLocalPersistence : browserSessionPersistence,
+    });
+} catch (error) {
+    console.warn('Falling back to session persistence during Firebase initialization.', error);
+    auth = initializeAuth(app, {
+        persistence: browserSessionPersistence,
+    });
+}
 const db = getFirestore(app);
 
 export { app, db, auth };

@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  browserLocalPersistence,
-  browserSessionPersistence,
   createUserWithEmailAndPassword,
   getAuth,
   onAuthStateChanged,
-  setPersistence,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 import {
@@ -41,6 +38,7 @@ import {
   reverseDeloadValue,
 } from '../../workout/utils';
 import { getStoredRememberMe, persistRememberMe } from '../../utils/remember-me';
+import { applyPersistencePreference } from '../../utils/auth-persistence';
 import '../../styles/style.css';
 
 const ExerciseStatus = ({ status }) => {
@@ -1036,17 +1034,16 @@ function WorkoutAuthPanel({ auth }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const applyPersistence = async (remember) => {
-    const persistenceType = remember ? browserLocalPersistence : browserSessionPersistence;
-    await setPersistence(auth, persistenceType);
-  };
-
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSubmitting(true);
     setError('');
     try {
-      await applyPersistence(rememberMe);
+      const applied = await applyPersistencePreference(auth, rememberMe ? 'local' : 'session');
+      if (applied !== 'local' && rememberMe) {
+        setRememberMe(false);
+        persistRememberMe(false);
+      }
       if (mode === 'sign-in') {
         await signInWithEmailAndPassword(auth, email, password);
       } else {

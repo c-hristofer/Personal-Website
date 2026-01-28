@@ -505,6 +505,15 @@
   flex-wrap: wrap;
 }
 
+.interval-card .exercise-card__title h3 {
+  margin: 0;
+  line-height: 1.1;
+}
+
+.interval-card .interval-total {
+  align-self: center;
+}
+
 .exercise-card__title--with-meta {
   justify-content: space-between;
   width: 100%;
@@ -681,6 +690,36 @@
   gap: var(--space-3);
   align-items: center;
   flex-wrap: wrap;
+}
+
+.interval-total {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(14, 165, 233, 0.12));
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: var(--color-primary-strong);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.interval-total__label {
+  opacity: 0.7;
+  line-height: 1;
+}
+
+.interval-total__value {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm);
+  letter-spacing: 0.06em;
+  line-height: 1;
 }
 
 .interval-list {

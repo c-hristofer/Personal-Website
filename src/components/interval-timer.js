@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { applyPersistencePreference } from '../utils/auth-persistence';
+import { db } from '../firebase';
 import { getStoredRememberMe, persistRememberMe } from '../utils/remember-me';
 
 const parseNumber = (value) => {
@@ -15,14 +17,38 @@ const formatSeconds = (value) => {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 };
 
+const formatDurationLabel = (value) => {
+  const total = Math.max(0, Number(value) || 0);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
+  }
+  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+};
+
+const getPlanTotalSeconds = (plan) => {
+  if (!plan || !Array.isArray(plan.segments)) return 0;
+  return plan.segments.reduce((total, segment) => {
+    const minutes = parseNumber(segment.minutes);
+    const seconds = parseNumber(segment.seconds);
+    const durationSeconds = Math.max(0, minutes * 60 + seconds);
+    const repeat = Math.max(1, Number(segment.repeat) || 1);
+    return total + durationSeconds * repeat;
+  }, 0);
+};
+
 function IntervalTimerProject() {
   const auth = getAuth();
   const [authState, setAuthState] = useState({ user: null, loading: true });
-  const [plans, setPlans] = useState([
+  const defaultPlans = useMemo(() => ([
     { id: 'plan-1', title: 'Interval Timer', segments: [{ label: 'Work', minutes: 0, seconds: 30, repeat: 1 }] },
-  ]);
+  ]), []);
+  const [plans, setPlans] = useState(defaultPlans);
   const [favoritePlanId, setFavoritePlanId] = useState(null);
   const [selectedPlanId, setSelectedPlanId] = useState('plan-1');
+  const [plansLoaded, setPlansLoaded] = useState(false);
   const [timerState, setTimerState] = useState({
     segments: [],
     currentIndex: 0,
@@ -39,6 +65,62 @@ function IntervalTimerProject() {
     });
     return () => unsub();
   }, [auth]);
+
+  useEffect(() => {
+    if (!authState.user) {
+      setPlans(defaultPlans);
+      setFavoritePlanId(defaultPlans[0]?.id || null);
+      setSelectedPlanId(defaultPlans[0]?.id || 'plan-1');
+      setPlansLoaded(false);
+      return undefined;
+    }
+    const ref = doc(db, 'users', authState.user.uid, 'intervalTimer', 'plans');
+    const unsub = onSnapshot(ref, (snapshot) => {
+      if (!snapshot.exists()) {
+        const fallbackFavorite = defaultPlans[0]?.id || 'plan-1';
+        setPlans(defaultPlans);
+        setFavoritePlanId(fallbackFavorite);
+        setSelectedPlanId(fallbackFavorite);
+        setPlansLoaded(true);
+        setDoc(ref, {
+          plans: defaultPlans,
+          favoritePlanId: fallbackFavorite,
+          updatedAt: new Date().toISOString(),
+        }).catch(() => {});
+        return;
+      }
+      const data = snapshot.data() || {};
+      const rawPlans = Array.isArray(data.plans) ? data.plans : defaultPlans;
+      const normalizedPlans = rawPlans.map((plan) => ({
+        id: plan?.id || `plan-${Date.now()}`,
+        title: plan?.title || 'Interval Timer',
+        segments: Array.isArray(plan?.segments)
+          ? plan.segments.map((segment) => ({
+              label: segment?.label || '',
+              minutes: segment?.minutes ?? 0,
+              seconds: segment?.seconds ?? 0,
+              repeat: segment?.repeat ?? 1,
+            }))
+          : [{ label: 'Work', minutes: 0, seconds: 30, repeat: 1 }],
+      }));
+      const favorite = data.favoritePlanId || normalizedPlans[0]?.id || 'plan-1';
+      setPlans(normalizedPlans);
+      setFavoritePlanId(favorite);
+      setSelectedPlanId(favorite);
+      setPlansLoaded(true);
+    });
+    return () => unsub();
+  }, [authState.user, db, defaultPlans]);
+
+  useEffect(() => {
+    if (!authState.user || !plansLoaded) return;
+    const ref = doc(db, 'users', authState.user.uid, 'intervalTimer', 'plans');
+    setDoc(ref, {
+      plans,
+      favoritePlanId: favoritePlanId || null,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true }).catch(() => {});
+  }, [authState.user, favoritePlanId, plans, plansLoaded]);
 
   const unlockAudioContext = useCallback(() => {
     const AudioContextCtor = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
@@ -75,21 +157,11 @@ function IntervalTimerProject() {
     () => plans.find((plan) => plan.id === selectedPlanId) || plans[0],
     [plans, selectedPlanId]
   );
+  const selectedPlanTotalSeconds = useMemo(
+    () => getPlanTotalSeconds(selectedPlan),
+    [selectedPlan]
+  );
 
-  useEffect(() => {
-    const storedFavorite = typeof window !== 'undefined'
-      ? window.localStorage.getItem('interval-timer-favorite')
-      : null;
-    if (storedFavorite) {
-      setFavoritePlanId(storedFavorite);
-      setSelectedPlanId(storedFavorite);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !favoritePlanId) return;
-    window.localStorage.setItem('interval-timer-favorite', favoritePlanId);
-  }, [favoritePlanId]);
 
   const normalizedSegments = useMemo(() => {
     const segmentList = selectedPlan?.segments || [];
@@ -338,17 +410,21 @@ function IntervalTimerProject() {
               }}
             >
               <option value="__new__">＋ New interval timer</option>
-              {plans.map((plan) => (
+            {plans.map((plan) => {
+              const totalSeconds = getPlanTotalSeconds(plan);
+              const totalLabel = totalSeconds ? ` • ${formatSeconds(totalSeconds)}` : '';
+              return (
                 <option key={plan.id} value={plan.id}>
-                  {favoritePlanId === plan.id ? '★ ' : ''}{plan.title || 'Untitled Plan'}
+                  {favoritePlanId === plan.id ? '★ ' : ''}{plan.title || 'Untitled Plan'}{totalLabel}
                 </option>
-              ))}
-            </select>
-            <span className="interval-plan-selector__badge">
-              {favoritePlanId === selectedPlanId ? 'Favorite' : 'Saved'}
-            </span>
-          </div>
-        </label>
+              );
+            })}
+          </select>
+          <span className="interval-plan-selector__badge">
+            {favoritePlanId === selectedPlanId ? 'Favorite' : 'Saved'}
+          </span>
+        </div>
+      </label>
         <div className="interval-plan-header__actions">
           <button
             type="button"
@@ -446,9 +522,13 @@ function IntervalTimerProject() {
       {!isEditingPlan && (
         <article className="exercise-card interval-card">
           <div className="exercise-card__head">
-            <div className="exercise-card__title">
-              <h3>{selectedPlan?.title || 'Interval Timer'}</h3>
-            </div>
+          <div className="exercise-card__title">
+            <h3>{selectedPlan?.title || 'Interval Timer'}</h3>
+            <span className="interval-total">
+              <span className="interval-total__label">Total time</span>
+              <span className="interval-total__value">{formatDurationLabel(selectedPlanTotalSeconds)}</span>
+            </span>
+          </div>
             <div className="exercise-card__meta">
               <button type="button" className="btn btn--secondary" onClick={startTimer} disabled={!normalizedSegments.length}>
                 Start

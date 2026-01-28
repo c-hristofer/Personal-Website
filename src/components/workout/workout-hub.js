@@ -94,6 +94,26 @@ const formatSeconds = (value) => {
   return `${mins}:${secs}`;
 };
 
+const formatDurationLabel = (value) => {
+  const total = Math.max(0, Number(value) || 0);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
+  }
+  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+};
+
+const getIntervalPlanTotalSeconds = (plan) => {
+  if (!plan || !Array.isArray(plan.segments)) return 0;
+  return plan.segments.reduce((total, segment) => {
+    const durationSeconds = parseDurationSeconds(segment?.duration || '');
+    const repeat = Math.max(1, Number(segment?.repeat) || 1);
+    return total + durationSeconds * repeat;
+  }, 0);
+};
+
 const convertIntervalSegments = (segments = []) => {
   if (!Array.isArray(segments)) {
     return [];
@@ -1520,6 +1540,12 @@ function IntervalPlanView({ plan, onStart, onToggleComplete, isComplete }) {
       <div className="exercise-card__head">
         <div className="exercise-card__title">
           <h3>{plan.title || 'Interval Timer'}</h3>
+          <span className="interval-total">
+            <span className="interval-total__label">Total time</span>
+            <span className="interval-total__value">
+              {formatDurationLabel(getIntervalPlanTotalSeconds(plan))}
+            </span>
+          </span>
         </div>
         <div className="exercise-card__meta">
           <button
@@ -1565,11 +1591,20 @@ function IntervalTimerPlayer({ timer, onPause, onResume, onReset, onSkip, onRest
   const current = timer.segments[timer.currentIndex];
   const next = timer.segments[timer.currentIndex + 1];
   const isRunning = timer.isRunning && timer.remaining > 0;
+  const totalRemainingSeconds = timer.segments.length
+    ? timer.remaining
+      + timer.segments
+        .slice(timer.currentIndex + 1)
+        .reduce((sum, segment) => sum + (segment.durationSeconds || 0), 0)
+    : 0;
   return (
     <section className="interval-player">
       <div className="interval-player__time">
         <p className="interval-player__label">{current?.label || timer.title}</p>
         <div className="interval-player__clock">{formatSeconds(timer.remaining)}</div>
+        {isRunning && (
+          <p className="help-text">Total time left: {formatDurationLabel(totalRemainingSeconds)}</p>
+        )}
         {next && <p className="help-text">Next: {next.label}</p>}
       </div>
       <div className="interval-player__controls">

@@ -267,7 +267,7 @@ function WorkoutData() {
     return (
       <main className="workout-page">
         <p>You need to sign in to view your workout history.</p>
-        <button type="button" className="btn" onClick={() => navigate('/projects/workout')}>
+        <button type="button" className="btn" onClick={() => navigate('/workout')}>
           Back to Workout
         </button>
       </main>
@@ -285,7 +285,7 @@ function WorkoutData() {
           <button
             type="button"
             className="btn btn--secondary"
-            onClick={() => navigate('/projects/workout')}
+            onClick={() => navigate('/workout')}
           >
             Back to workout
           </button>

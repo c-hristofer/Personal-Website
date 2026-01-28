@@ -12,8 +12,14 @@ function PersonalProjects() {
         </p>
 
         <div>
-          <a href="/projects/workout" className="main-card">
+          <a href="/workout" className="main-card">
             <strong>Workout Planner &amp; Tracker</strong>
+          </a>
+        </div>
+
+        <div>
+          <a href="/interval-timer" className="main-card">
+            <strong>Interval Timer</strong>
           </a>
         </div>
 

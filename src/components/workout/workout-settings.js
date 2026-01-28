@@ -62,7 +62,7 @@ function WorkoutSettings() {
 
   const handleSignOut = async () => {
     await signOut(auth);
-    navigate('/projects/workout');
+    navigate('/workout');
   };
 
   const handleExport = async () => {
@@ -94,7 +94,7 @@ function WorkoutSettings() {
       await deleteWorkoutData(user.uid);
       await deleteUser(user);
       setStatus('Account deleted. Redirecting…');
-      navigate('/projects/workout');
+      navigate('/workout');
     } catch (err) {
       if (err.code === 'auth/requires-recent-login') {
         setError('Please sign in again to delete your account.');
@@ -118,7 +118,7 @@ function WorkoutSettings() {
     return (
       <main className="workout-page">
         <p>You need to sign in to manage settings.</p>
-        <Link to="/projects/workout" className="btn">Back to Workout</Link>
+        <Link to="/workout" className="btn">Back to Workout</Link>
       </main>
     );
   }
@@ -133,7 +133,7 @@ function WorkoutSettings() {
         <button
           type="button"
           className="btn btn--secondary"
-          onClick={() => navigate('/projects/workout')}
+          onClick={() => navigate('/workout')}
         >
           Back
         </button>

@@ -38,7 +38,7 @@ function HomePage() {
             Entropy-Based Wordle Solver
           </a>
 
-          <a href="/projects/workout" className="main-card">
+          <a href="/workout" className="main-card">
             Workout Planner &amp; Tracker
           </a>
         </div>

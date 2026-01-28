@@ -119,6 +119,7 @@ const convertIntervalSegments = (segments = []) => {
       duration,
       minutes,
       seconds,
+      repeat: segment?.repeat !== undefined ? segment.repeat.toString() : '1',
     };
   });
 };
@@ -180,9 +181,9 @@ function WorkoutHub() {
     weightsSnapshot.current = weights;
   }, [weights]);
 
-  const playIntervalChime = useCallback(() => {
+  const unlockAudioContext = useCallback(() => {
     const AudioContextCtor = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
-    if (!AudioContextCtor) return;
+    if (!AudioContextCtor) return null;
     if (!audioContextRef.current) {
       audioContextRef.current = new AudioContextCtor();
     }
@@ -190,6 +191,12 @@ function WorkoutHub() {
     if (ctx.state === 'suspended') {
       ctx.resume().catch(() => {});
     }
+    return ctx;
+  }, []);
+
+  const playIntervalChime = useCallback(() => {
+    const ctx = unlockAudioContext();
+    if (!ctx) return;
     const oscillator = ctx.createOscillator();
     oscillator.type = 'sine';
     oscillator.frequency.value = 880;
@@ -200,7 +207,10 @@ function WorkoutHub() {
     const now = ctx.currentTime;
     oscillator.start(now);
     oscillator.stop(now + 0.5);
-  }, []);
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate([120, 80, 120]);
+    }
+  }, [unlockAudioContext]);
 
   useEffect(() => {
     if (!timerState.isRunning || !timerState.segments.length) {
@@ -470,6 +480,10 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
         segments[index].minutes = Math.floor(total / 60).toString();
         segments[index].seconds = (total % 60).toString().padStart(2, '0');
       }
+      if (field === 'repeat') {
+        const repeatValue = Math.max(1, Number(value) || 1);
+        segments[index].repeat = repeatValue.toString();
+      }
       plans[dayKey] = { ...current, segments };
       return { ...prev, intervalPlans: plans };
     });
@@ -481,7 +495,7 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
       const plans = cloneIntervals(prev.intervalPlans || {});
       const current = plans[dayKey] || { title: '', segments: [] };
       const segments = Array.isArray(current.segments) ? [...current.segments] : [];
-      segments.push({ label: '', duration: '' });
+      segments.push({ label: '', duration: '', repeat: '1' });
       plans[dayKey] = { ...current, segments };
       return { ...prev, intervalPlans: plans };
     });
@@ -530,13 +544,19 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
   };
 
   const startIntervalTimer = (dayKey) => {
+    unlockAudioContext();
     const intervalPlan = plan.intervalPlans?.[dayKey];
     if (!intervalPlan) return;
     const segments = (intervalPlan.segments || [])
-      .map((segment) => ({
-        label: segment.label || '',
-        durationSeconds: parseDurationSeconds(segment.duration),
-      }))
+      .flatMap((segment) => {
+        const repeat = Math.max(1, Number(segment.repeat) || 1);
+        const durationSeconds = parseDurationSeconds(segment.duration);
+        if (!durationSeconds) return [];
+        return Array.from({ length: repeat }, () => ({
+          label: segment.label || '',
+          durationSeconds,
+        }));
+      })
       .filter((segment) => segment.durationSeconds > 0);
     if (!segments.length) {
       return;
@@ -557,6 +577,7 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
 
   const resumeIntervalTimer = () => {
     if (!timerState.segments.length) return;
+    unlockAudioContext();
     setTimerState((prev) => ({ ...prev, isRunning: true }));
   };
 
@@ -665,6 +686,7 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
                   })(),
                   minutes: segment?.minutes || '',
                   seconds: segment?.seconds || '',
+                  repeat: segment?.repeat || '1',
                 }))
                 .filter((segment) => segment.label || segment.duration)
             : [],
@@ -877,17 +899,7 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
 
   if (!authState.user) {
     return (
-      <main className="workout-page workout-page--auth">
-        <section className="workout-hero workout-hero--auth">
-          <div className="workout-hero__identity">
-            <div>
-              <h1>Workout Planner and Tracker</h1>
-              <p className="lead">
-                Design your weekly split, log weights, and track cardio in one secure dashboard.
-              </p>
-            </div>
-          </div>
-        </section>
+      <main className="workout-auth-page">
         <WorkoutAuthPanel auth={auth} />
       </main>
     );
@@ -912,19 +924,14 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
           <button
             type="button"
             className="btn btn--secondary"
-            onClick={() => navigate('/projects/workout/settings')}
+            onClick={() => navigate('/workout/settings')}
           >
             Settings
           </button>
-          {!isEditing && (
-            <button className="btn" onClick={handleStartEditing}>
-              Edit plan
-            </button>
-          )}
           <button
             type="button"
             className="btn btn--ghost"
-            onClick={() => navigate('/projects/workout/data')}
+            onClick={() => navigate('/workout/data')}
           >
             Data
           </button>
@@ -1019,6 +1026,13 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
             onToggleComplete={() => handleToggleCardioComplete(selectedDay)}
             isComplete={!!cardioCompletion.completed}
           />
+          {!isEditing && (
+            <div className="workout-edit-cta">
+              <button className="btn" onClick={handleStartEditing}>
+                Edit plan
+              </button>
+            </div>
+          )}
         </>
       )}
     </main>
@@ -1060,74 +1074,89 @@ function WorkoutAuthPanel({ auth }) {
   };
 
   return (
-    <section className="workout-auth">
-      <div className="workout-auth__tabs">
-        <button
-          type="button"
-          className={mode === 'sign-in' ? 'is-active' : ''}
-          onClick={() => setMode('sign-in')}
-        >
-          Sign in
-        </button>
-        <button
-          type="button"
-          className={mode === 'create' ? 'is-active' : ''}
-          onClick={() => setMode('create')}
-        >
-          Create account
-        </button>
-      </div>
-      <form className="workout-auth__form" onSubmit={handleSubmit}>
-        <label>
-          Email
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
-          />
-        </label>
-        {mode === 'create' && (
+    <div className="todo-auth">
+      <section className="todo-auth__intro">
+        <h1>Workout Planner</h1>
+        <p>Log lifts, plan deloads, and stay accountable with synced workouts across every device.</p>
+      </section>
+
+      <section className="todo-auth__panel">
+        <div className="todo-auth__tabs">
+          <button
+            type="button"
+            className={mode === 'sign-in' ? 'is-active' : ''}
+            onClick={() => setMode('sign-in')}
+          >
+            Sign in
+          </button>
+          <button
+            type="button"
+            className={mode === 'create' ? 'is-active' : ''}
+            onClick={() => setMode('create')}
+          >
+            Create account
+          </button>
+        </div>
+
+        <form className="todo-auth__form" onSubmit={handleSubmit}>
           <label>
-            Confirm password
+            Email
             <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
-              autoComplete="new-password"
+              autoComplete="email"
             />
           </label>
-        )}
-        <label className="remember-toggle">
-          <input
-            type="checkbox"
-            checked={rememberMe}
-            onChange={() => {
-              const next = !rememberMe;
-              setRememberMe(next);
-              persistRememberMe(next);
-            }}
-          />
-          Remember me on this device
-        </label>
-        {error && <p className="form-error">{error}</p>}
-        <button type="submit" className="btn" disabled={submitting}>
-          {submitting ? 'Please wait…' : mode === 'sign-in' ? 'Sign in' : 'Create account'}
-        </button>
-      </form>
-    </section>
+          <label>
+            Password
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
+            />
+          </label>
+          {mode === 'create' && (
+            <label>
+              Confirm password
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+              />
+            </label>
+          )}
+          <label className="remember-toggle" data-active={rememberMe}>
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              className="remember-toggle__input"
+              onChange={() => {
+                const next = !rememberMe;
+                setRememberMe(next);
+                persistRememberMe(next);
+              }}
+            />
+            <span className="remember-toggle__track" aria-hidden="true">
+              <span className="remember-toggle__thumb" />
+            </span>
+            <span className="remember-toggle__copy">
+              <span className="remember-toggle__title">Remember me</span>
+              <span className="remember-toggle__hint">Keep yourself signed in on this device.</span>
+            </span>
+          </label>
+          {error && <p className="form-error">{error}</p>}
+          <button type="submit" disabled={submitting}>
+            {submitting ? 'Please wait…' : mode === 'sign-in' ? 'Sign in' : 'Create account'}
+          </button>
+        </form>
+      </section>
+    </div>
   );
 }
 
@@ -1515,7 +1544,10 @@ function IntervalPlanView({ plan, onStart, onToggleComplete, isComplete }) {
           <ul className="interval-list">
             {plan.segments.map((segment, index) => (
               <li key={`${segment.label}-${index}`}>
-                <span>{segment.label || `Interval ${index + 1}`}</span>
+                <span>
+                  {segment.label || `Interval ${index + 1}`}
+                  {Number(segment.repeat) > 1 ? ` ×${segment.repeat}` : ''}
+                </span>
                 <span className="interval-list__duration">{segment.duration || '--'}</span>
               </li>
             ))}
@@ -1702,36 +1734,43 @@ function IntervalPlanEditor({ plan, onTitleChange, onSegmentChange, onAddSegment
           placeholder="e.g., Abs Flow"
         />
       </label>
-      <div className="interval-editor__segments">
-        {(currentPlan.segments || []).map((segment, index) => (
-          <div key={index} className="interval-editor__row">
-            <input
-              type="text"
+          <div className="interval-editor__segments">
+            {(currentPlan.segments || []).map((segment, index) => (
+              <div key={index} className="interval-editor__row">
+                <input
+                  type="text"
               value={segment.label || ''}
               placeholder="Move name"
               onChange={(event) => onSegmentChange(index, 'label', event.target.value)}
             />
-            <div className="interval-editor__duration">
-              <input
-                type="number"
-                min="0"
-                value={segment.minutes || ''}
-                placeholder="Min"
-                onChange={(event) => onSegmentChange(index, 'minutes', event.target.value)}
-              />
-            <span> : </span>
-              <input
-                type="number"
-                min="0"
-                max="59"
-                value={segment.seconds || ''}
-                placeholder="Sec"
-                onChange={(event) => onSegmentChange(index, 'seconds', event.target.value)}
-              />
-            </div>
-            <button
-              type="button"
-              className="icon-button"
+                <div className="interval-editor__duration">
+                  <input
+                    type="number"
+                    min="0"
+                    value={segment.minutes || ''}
+                    placeholder="Min"
+                    onChange={(event) => onSegmentChange(index, 'minutes', event.target.value)}
+                  />
+                  <span> : </span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={segment.seconds || ''}
+                    placeholder="Sec"
+                    onChange={(event) => onSegmentChange(index, 'seconds', event.target.value)}
+                  />
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  value={segment.repeat || '1'}
+                  placeholder="x"
+                  onChange={(event) => onSegmentChange(index, 'repeat', event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="icon-button"
               onClick={() => onRemoveSegment(index)}
               aria-label="Remove interval"
             >

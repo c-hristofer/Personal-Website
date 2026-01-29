@@ -276,20 +276,19 @@ function WorkoutData() {
 
   return (
     <main className={`workout-page${isDeloadWeek ? ' workout-page--deload' : ''}`}>
-      <header className="workout-hero">
+      <header className="workout-hero workout-hero--settings">
         <div>
           <h1>Workout Data</h1>
           <p className="help-text">Visualize your weekly strength progress.</p>
         </div>
-        <div className="workout-hero__actions">
-          <button
-            type="button"
-            className="btn btn--secondary"
-            onClick={() => navigate('/workout')}
-          >
-            Back to workout
-          </button>
-        </div>
+        <button
+          type="button"
+          className="workout-hero__back"
+          onClick={() => navigate('/workout')}
+          aria-label="Back"
+        >
+          <img src="/icons/chevron-left.svg" alt="" aria-hidden="true" />
+        </button>
       </header>
       {isDeloadWeek && (
         <div className="deload-banner" role="status" aria-live="polite">

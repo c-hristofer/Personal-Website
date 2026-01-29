@@ -77,20 +77,35 @@ const normalizeDayNames = (names = {}) => {
   return defaults;
 };
 
+const buildPlanId = (rawId, prefix, dayKey, index) => {
+  if (rawId !== undefined && rawId !== null && rawId !== '') {
+    return rawId.toString();
+  }
+  return `${prefix}-${dayKey}-${index + 1}`;
+};
+
 const normalizeIntervalPlans = (plans = {}) => {
   const defaults = createEmptyIntervalPlans();
   DAY_KEYS.forEach((key) => {
-    const plan = plans[key] || {};
-    const segments = Array.isArray(plan.segments)
-      ? plan.segments.map((segment) => ({
-          label: segment?.label ? segment.label.toString() : '',
-          duration: segment?.duration ? segment.duration.toString() : '',
-        }))
-      : [];
-    defaults[key] = {
-      title: plan.title ? plan.title.toString() : '',
-      segments,
-    };
+    const legacyPlan = plans[key];
+    const legacyHasContent = Boolean(legacyPlan?.title) || (legacyPlan?.segments || []).length > 0;
+    const dayPlans = Array.isArray(plans[key])
+      ? plans[key]
+      : (legacyHasContent ? [legacyPlan] : []);
+    defaults[key] = dayPlans.map((plan, index) => {
+      const segments = Array.isArray(plan?.segments)
+        ? plan.segments.map((segment) => ({
+            label: segment?.label ? segment.label.toString() : '',
+            duration: segment?.duration ? segment.duration.toString() : '',
+            repeat: segment?.repeat !== undefined ? segment.repeat.toString() : '1',
+          }))
+        : [];
+      return {
+        id: buildPlanId(plan?.id, 'interval', key, index),
+        title: plan?.title ? plan.title.toString() : '',
+        segments,
+      };
+    });
   });
   return defaults;
 };
@@ -98,14 +113,83 @@ const normalizeIntervalPlans = (plans = {}) => {
 const normalizeCardioPlans = (plans = {}) => {
   const defaults = createEmptyCardioPlans();
   DAY_KEYS.forEach((key) => {
-    const plan = plans[key] || {};
-    defaults[key] = {
-      title: plan.title ? plan.title.toString() : '',
-      duration: plan.duration ? plan.duration.toString() : '',
-      notes: plan.notes ? plan.notes.toString() : '',
-    };
+    const legacyPlan = plans[key];
+    const legacyHasContent = Boolean(legacyPlan?.title || legacyPlan?.duration || legacyPlan?.notes);
+    const dayPlans = Array.isArray(plans[key])
+      ? plans[key]
+      : (legacyHasContent ? [legacyPlan] : []);
+    defaults[key] = dayPlans.map((plan, index) => ({
+      id: buildPlanId(plan?.id, 'cardio', key, index),
+      title: plan?.title ? plan.title.toString() : '',
+      duration: plan?.duration ? plan.duration.toString() : '',
+      notes: plan?.notes ? plan.notes.toString() : '',
+    }));
   });
   return defaults;
+};
+
+const normalizeDayOrder = (order = {}, days = {}, intervalPlans = {}, cardioPlans = {}) => {
+  const normalized = {};
+  DAY_KEYS.forEach((dayKey) => {
+    const dayExercises = Array.isArray(days[dayKey]) ? days[dayKey] : [];
+    const exerciseIds = dayExercises.map((exercise) => exercise?.id).filter(Boolean);
+    const intervalList = Array.isArray(intervalPlans?.[dayKey]) ? intervalPlans[dayKey] : [];
+    const cardioList = Array.isArray(cardioPlans?.[dayKey]) ? cardioPlans[dayKey] : [];
+    const intervalIds = intervalList.map((item) => item?.id).filter(Boolean);
+    const cardioIds = cardioList.map((item) => item?.id).filter(Boolean);
+    const existing = Array.isArray(order[dayKey]) ? order[dayKey] : [];
+    const items = [];
+    const usedExercises = new Set();
+    const usedIntervals = new Set();
+    const usedCardio = new Set();
+
+    existing.forEach((item) => {
+      if (!item || typeof item !== 'object') return;
+      if (item.type === 'exercise' && item.id && exerciseIds.includes(item.id) && !usedExercises.has(item.id)) {
+        items.push({ type: 'exercise', id: item.id });
+        usedExercises.add(item.id);
+        return;
+      }
+      if (item.type === 'interval') {
+        const id = item.id || intervalIds[0];
+        if (id && intervalIds.includes(id) && !usedIntervals.has(id)) {
+          items.push({ type: 'interval', id });
+          usedIntervals.add(id);
+        }
+        return;
+      }
+      if (item.type === 'cardio') {
+        const id = item.id || cardioIds[0];
+        if (id && cardioIds.includes(id) && !usedCardio.has(id)) {
+          items.push({ type: 'cardio', id });
+          usedCardio.add(id);
+        }
+      }
+    });
+
+    exerciseIds.forEach((id) => {
+      if (!usedExercises.has(id)) {
+        items.push({ type: 'exercise', id });
+        usedExercises.add(id);
+      }
+    });
+
+    intervalIds.forEach((id) => {
+      if (!usedIntervals.has(id)) {
+        items.push({ type: 'interval', id });
+        usedIntervals.add(id);
+      }
+    });
+    cardioIds.forEach((id) => {
+      if (!usedCardio.has(id)) {
+        items.push({ type: 'cardio', id });
+        usedCardio.add(id);
+      }
+    });
+
+    normalized[dayKey] = items;
+  });
+  return normalized;
 };
 
 export const computeWeekExerciseSummaries = (days = {}, weightsByDay = {}) => {
@@ -157,6 +241,7 @@ export const subscribeToPlan = (uid, callback) => {
           dayNames: createDefaultDayNames(),
           intervalPlans: createEmptyIntervalPlans(),
           cardioPlans: createEmptyCardioPlans(),
+          dayOrder: normalizeDayOrder({}, createEmptyPlanDays(), createEmptyIntervalPlans(), createEmptyCardioPlans()),
           updatedAt: new Date().toISOString(),
         }).catch(() => {});
       }
@@ -165,6 +250,7 @@ export const subscribeToPlan = (uid, callback) => {
         dayNames: createDefaultDayNames(),
         intervalPlans: createEmptyIntervalPlans(),
         cardioPlans: createEmptyCardioPlans(),
+        dayOrder: normalizeDayOrder({}, createEmptyPlanDays(), createEmptyIntervalPlans(), createEmptyCardioPlans()),
         updatedAt: null,
       });
       return;
@@ -176,6 +262,7 @@ export const subscribeToPlan = (uid, callback) => {
       dayNames: normalizeDayNames(data.dayNames),
       intervalPlans: normalizeIntervalPlans(data.intervalPlans),
       cardioPlans: normalizeCardioPlans(data.cardioPlans),
+      dayOrder: normalizeDayOrder(data.dayOrder, data.days, data.intervalPlans, data.cardioPlans),
       updatedAt: data.updatedAt || null,
     });
   }, (error) => {
@@ -185,11 +272,15 @@ export const subscribeToPlan = (uid, callback) => {
 
 export const savePlan = (uid, payload) => {
   const ref = getPlanRef(uid);
+  const normalizedDays = normalizeDays(payload.days);
+  const normalizedIntervals = normalizeIntervalPlans(payload.intervalPlans);
+  const normalizedCardio = normalizeCardioPlans(payload.cardioPlans);
   return setDoc(ref, {
-    days: normalizeDays(payload.days),
+    days: normalizedDays,
     dayNames: normalizeDayNames(payload.dayNames),
-    intervalPlans: normalizeIntervalPlans(payload.intervalPlans),
-    cardioPlans: normalizeCardioPlans(payload.cardioPlans),
+    intervalPlans: normalizedIntervals,
+    cardioPlans: normalizedCardio,
+    dayOrder: normalizeDayOrder(payload.dayOrder, normalizedDays, normalizedIntervals, normalizedCardio),
     updatedAt: new Date().toISOString(),
   }, { merge: true });
 };
@@ -306,35 +397,44 @@ export const subscribeToCompletions = (uid, weekId, callback) => {
   });
 };
 
-export const updateCompletion = async (uid, weekId, dayKey, exerciseId, data) => {
+export const updateCompletion = async (uid, weekId, dayKey, target, data) => {
   const ref = getCompletionRef(uid, weekId);
   const entry = {
     ...data,
     updatedAt: new Date().toISOString(),
   };
-  const payload = (exerciseId === 'intervalPlan' || exerciseId === 'cardioPlan')
-    ? {
-        weekStartISO: weekId,
-        updatedAt: new Date().toISOString(),
-        dayData: {
-          [dayKey]: {
-            [exerciseId]: entry,
-          },
-        },
-      }
-    : {
-        weekStartISO: weekId,
-        updatedAt: new Date().toISOString(),
-        dayData: {
-          [dayKey]: {
-            exercises: {
-              [exerciseId]: entry,
-            },
-          },
+  let dayPayload = {};
+  if (typeof target === 'object' && target !== null) {
+    if (target.type === 'interval' && target.id) {
+      dayPayload = {
+        intervalPlans: {
+          [target.id]: entry,
         },
       };
+    } else if (target.type === 'cardio' && target.id) {
+      dayPayload = {
+        cardioPlans: {
+          [target.id]: entry,
+        },
+      };
+    }
+  } else if (target === 'intervalPlan' || target === 'cardioPlan') {
+    dayPayload = {
+      [target]: entry,
+    };
+  } else if (typeof target === 'string') {
+    dayPayload = {
+      exercises: {
+        [target]: entry,
+      },
+    };
+  }
   await setDoc(ref, {
-    ...payload,
+    weekStartISO: weekId,
+    updatedAt: new Date().toISOString(),
+    dayData: {
+      [dayKey]: dayPayload,
+    },
   }, { merge: true });
 };
 

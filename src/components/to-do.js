@@ -46,6 +46,7 @@ function ToDo() {
   const [showRecurring, setShowRecurring] = useState(false);
   const [showWeekly, setShowWeekly] = useState(true);
   const [showPastDue, setShowPastDue] = useState(true);
+  const [showCompleted, setShowCompleted] = useState(true);
 
   const [reminderTime, setReminderTime] = useState(getCurrentTime());
   const [recurringTime, setRecurringTime] = useState(getCurrentTime());
@@ -586,9 +587,13 @@ const unmarkRecurringComplete = async (id, dateStr) => {
           Reminders for the Week ({weekRangeString})
         </h2>
         {showWeekly && weekLayout}
-        {showWeekly && (
+        {showWeekly && weekLayout}
+      </div>
+
+      <div className="section todo-section">
+        <h2 onClick={() => setShowCompleted(!showCompleted)}>Completed This Week</h2>
+        {showCompleted && (
           <div className="completed-list">
-            <h3>Completed This Week</h3>
             {completedThisWeek.length === 0 ? (
               <p className="help-text">No reminders completed yet.</p>
             ) : (
@@ -622,7 +627,7 @@ const unmarkRecurringComplete = async (id, dateStr) => {
                             {r.completedDate
                               ? <span className="reminder-date">{formatDateDisplay(r.completedDate)}</span>
                               : r.dueDate && <span className="reminder-date">{formatDateDisplay(r.dueDate)}</span>}
-                      {renderTimeChip(r)}
+                            {renderTimeChip(r)}
                           </span>
                         </div>
                       </div>
@@ -650,7 +655,7 @@ const unmarkRecurringComplete = async (id, dateStr) => {
                     <div className="reminder-details">
                       <span className="reminder-title">{r.title}</span>
                       <span className="reminder-meta">
-                            {renderTimeChip(r)}
+                        {renderTimeChip(r)}
                         {r.dueDate && <span className="reminder-date">{formatDateDisplay(r.dueDate)}</span>}
                       </span>
                     </div>

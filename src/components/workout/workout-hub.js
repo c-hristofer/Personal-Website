@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   createUserWithEmailAndPassword,
@@ -33,7 +33,6 @@ import {
   computeDeloadState,
   formatWeightValue,
   isNumericWeight,
-  normalizeDeloadConfig,
   parseNumericWeight,
   reverseDeloadValue,
 } from '../../workout/utils';
@@ -114,6 +113,12 @@ const getIntervalPlanTotalSeconds = (plan) => {
   }, 0);
 };
 
+const hasIntervalPlanContent = (plan) =>
+  Boolean(plan?.title) || (Array.isArray(plan?.segments) && plan.segments.length > 0);
+
+const hasCardioPlanContent = (plan) =>
+  Boolean(plan?.title || plan?.duration || plan?.notes);
+
 const convertIntervalSegments = (segments = []) => {
   if (!Array.isArray(segments)) {
     return [];
@@ -147,13 +152,113 @@ const convertIntervalSegments = (segments = []) => {
 const convertIntervalPlans = (plans = {}) => {
   const clone = cloneIntervals(plans);
   Object.keys(clone).forEach((dayKey) => {
-    const plan = clone[dayKey] || { title: '', segments: [] };
-    clone[dayKey] = {
+    const dayPlans = Array.isArray(clone[dayKey]) ? clone[dayKey] : [];
+    clone[dayKey] = dayPlans.map((plan) => ({
+      id: plan.id,
       title: plan.title || '',
       segments: convertIntervalSegments(plan.segments || []),
-    };
+    }));
   });
   return clone;
+};
+
+const createIntervalPlanItem = () => ({
+  id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `interval-${Date.now()}`,
+  title: '',
+  segments: [],
+});
+
+const createCardioPlanItem = () => ({
+  id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `cardio-${Date.now()}`,
+  title: '',
+  duration: '',
+  notes: '',
+});
+
+const createEmptyDayOrder = () => DAY_KEYS.reduce((acc, dayKey) => {
+  acc[dayKey] = [];
+  return acc;
+}, {});
+
+const normalizeDayOrder = (
+  order = {},
+  days = {},
+  intervalPlans = {},
+  cardioPlans = {},
+  options = {},
+) => {
+  const normalized = {};
+  const includeEmpty = Boolean(options.includeEmpty);
+  DAY_KEYS.forEach((dayKey) => {
+    const exercises = Array.isArray(days[dayKey]) ? days[dayKey] : [];
+    const exerciseIds = exercises.map((exercise) => exercise?.id).filter(Boolean);
+    const intervalList = Array.isArray(intervalPlans?.[dayKey]) ? intervalPlans[dayKey] : [];
+    const cardioList = Array.isArray(cardioPlans?.[dayKey]) ? cardioPlans[dayKey] : [];
+    const intervalIds = intervalList.map((item) => item?.id).filter(Boolean);
+    const cardioIds = cardioList.map((item) => item?.id).filter(Boolean);
+    const existing = Array.isArray(order[dayKey]) ? order[dayKey] : [];
+    const items = [];
+    const usedExercises = new Set();
+    const usedIntervals = new Set();
+    const usedCardio = new Set();
+
+    existing.forEach((item) => {
+      if (!item || typeof item !== 'object') return;
+      if (item.type === 'exercise' && item.id && exerciseIds.includes(item.id) && !usedExercises.has(item.id)) {
+        items.push({ type: 'exercise', id: item.id });
+        usedExercises.add(item.id);
+        return;
+      }
+      if (item.type === 'interval') {
+        const id = item.id || intervalIds[0];
+        const plan = intervalList.find((entry) => entry?.id === id);
+        const hasContent = plan ? hasIntervalPlanContent(plan) : false;
+        if (id && intervalIds.includes(id) && !usedIntervals.has(id) && (includeEmpty || hasContent)) {
+          items.push({ type: 'interval', id });
+          usedIntervals.add(id);
+        }
+        return;
+      }
+      if (item.type === 'cardio') {
+        const id = item.id || cardioIds[0];
+        const plan = cardioList.find((entry) => entry?.id === id);
+        const hasContent = plan ? hasCardioPlanContent(plan) : false;
+        if (id && cardioIds.includes(id) && !usedCardio.has(id) && (includeEmpty || hasContent)) {
+          items.push({ type: 'cardio', id });
+          usedCardio.add(id);
+        }
+      }
+    });
+
+    exerciseIds.forEach((id) => {
+      if (!usedExercises.has(id)) {
+        items.push({ type: 'exercise', id });
+        usedExercises.add(id);
+      }
+    });
+
+    intervalList.forEach((plan) => {
+      const id = plan?.id;
+      if (!id || usedIntervals.has(id)) return;
+      const hasContent = Boolean(plan?.title) || (plan?.segments || []).length > 0;
+      if (includeEmpty || hasContent) {
+        items.push({ type: 'interval', id });
+        usedIntervals.add(id);
+      }
+    });
+    cardioList.forEach((plan) => {
+      const id = plan?.id;
+      if (!id || usedCardio.has(id)) return;
+      const hasContent = Boolean(plan?.title || plan?.duration || plan?.notes);
+      if (includeEmpty || hasContent) {
+        items.push({ type: 'cardio', id });
+        usedCardio.add(id);
+      }
+    });
+
+    normalized[dayKey] = items;
+  });
+  return normalized;
 };
 
 const defaultExercise = () => ({
@@ -172,6 +277,7 @@ function WorkoutHub() {
     dayNames: createDefaultDayNames(),
     intervalPlans: createEmptyIntervalPlans(),
     cardioPlans: createEmptyCardioPlans(),
+    dayOrder: createEmptyDayOrder(),
   });
   const [weights, setWeights] = useState({});
   const [settings, setSettings] = useState(null);
@@ -188,6 +294,7 @@ function WorkoutHub() {
   const weightsSnapshot = useRef({});
   const [timerState, setTimerState] = useState({
     dayKey: null,
+    intervalId: null,
     segments: [],
     currentIndex: 0,
     remaining: 0,
@@ -283,6 +390,7 @@ function WorkoutHub() {
         dayNames: createDefaultDayNames(),
         intervalPlans: createEmptyIntervalPlans(),
         cardioPlans: createEmptyCardioPlans(),
+        dayOrder: createEmptyDayOrder(),
       });
       setWeights({});
       setSettings(null);
@@ -381,17 +489,12 @@ function WorkoutHub() {
   const handleStartEditing = () => {
     setPlanError('');
     setPlanSaving(false);
-    const normalizedDeload = normalizeDeloadConfig(settings || {});
-    const nextAnchor = settings?.deloadAnchorWeekId || normalizedDeload.deloadAnchorWeekId || weekInfo.weekId;
     setEditDraft({
       days: clonePlan(plan.days),
       dayNames: { ...plan.dayNames },
       intervalPlans: convertIntervalPlans(plan.intervalPlans),
       cardioPlans: cloneCardioPlans(plan.cardioPlans),
-      deload: {
-        ...normalizedDeload,
-        deloadAnchorWeekId: nextAnchor,
-      },
+      dayOrder: normalizeDayOrder(plan.dayOrder, plan.days, plan.intervalPlans, plan.cardioPlans, { includeEmpty: true }),
     });
     setIsEditing(true);
   };
@@ -418,9 +521,80 @@ function WorkoutHub() {
       if (!prev) return prev;
       const nextDays = clonePlan(prev.days);
       const dayExercises = Array.isArray(nextDays[dayKey]) ? [...nextDays[dayKey]] : [];
-      dayExercises.push(defaultExercise());
+      const newExercise = defaultExercise();
+      dayExercises.push(newExercise);
       nextDays[dayKey] = dayExercises;
-      return { ...prev, days: nextDays };
+      const nextOrder = normalizeDayOrder(prev.dayOrder, nextDays, prev.intervalPlans, prev.cardioPlans, { includeEmpty: true });
+      const dayOrder = Array.isArray(nextOrder[dayKey]) ? [...nextOrder[dayKey]] : [];
+      const lastExerciseOffset = [...dayOrder].reverse().findIndex((item) => item.type === 'exercise');
+      if (lastExerciseOffset === -1) {
+        dayOrder.unshift({ type: 'exercise', id: newExercise.id });
+      } else {
+        const insertAt = dayOrder.length - lastExerciseOffset;
+        dayOrder.splice(insertAt, 0, { type: 'exercise', id: newExercise.id });
+      }
+      nextOrder[dayKey] = dayOrder;
+      return { ...prev, days: nextDays, dayOrder: nextOrder };
+    });
+  };
+
+  const handleAddIntervalItem = (dayKey) => {
+    setEditDraft((prev) => {
+      if (!prev) return prev;
+      const plans = cloneIntervals(prev.intervalPlans || {});
+      const dayPlans = Array.isArray(plans[dayKey]) ? [...plans[dayKey]] : [];
+      const newPlan = createIntervalPlanItem();
+      dayPlans.push(newPlan);
+      plans[dayKey] = dayPlans;
+      const nextOrder = normalizeDayOrder(prev.dayOrder, prev.days, plans, prev.cardioPlans, { includeEmpty: true });
+      const dayOrder = Array.isArray(nextOrder[dayKey]) ? [...nextOrder[dayKey]] : [];
+      dayOrder.push({ type: 'interval', id: newPlan.id });
+      nextOrder[dayKey] = dayOrder;
+      return { ...prev, intervalPlans: plans, dayOrder: nextOrder };
+    });
+  };
+
+  const handleAddCardioItem = (dayKey) => {
+    setEditDraft((prev) => {
+      if (!prev) return prev;
+      const plans = cloneCardioPlans(prev.cardioPlans || {});
+      const dayPlans = Array.isArray(plans[dayKey]) ? [...plans[dayKey]] : [];
+      const newPlan = createCardioPlanItem();
+      dayPlans.push(newPlan);
+      plans[dayKey] = dayPlans;
+      const nextOrder = normalizeDayOrder(prev.dayOrder, prev.days, prev.intervalPlans, plans, { includeEmpty: true });
+      const dayOrder = Array.isArray(nextOrder[dayKey]) ? [...nextOrder[dayKey]] : [];
+      dayOrder.push({ type: 'cardio', id: newPlan.id });
+      nextOrder[dayKey] = dayOrder;
+      return { ...prev, cardioPlans: plans, dayOrder: nextOrder };
+    });
+  };
+
+  const handleRemoveIntervalItem = (dayKey, intervalId) => {
+    setEditDraft((prev) => {
+      if (!prev) return prev;
+      const plans = cloneIntervals(prev.intervalPlans || {});
+      const dayPlans = Array.isArray(plans[dayKey]) ? [...plans[dayKey]] : [];
+      plans[dayKey] = dayPlans.filter((plan) => plan.id !== intervalId);
+      const nextOrder = normalizeDayOrder(prev.dayOrder, prev.days, plans, prev.cardioPlans, { includeEmpty: true });
+      nextOrder[dayKey] = (nextOrder[dayKey] || []).filter(
+        (item) => item.type !== 'interval' || item.id !== intervalId,
+      );
+      return { ...prev, intervalPlans: plans, dayOrder: nextOrder };
+    });
+  };
+
+  const handleRemoveCardioItem = (dayKey, cardioId) => {
+    setEditDraft((prev) => {
+      if (!prev) return prev;
+      const plans = cloneCardioPlans(prev.cardioPlans || {});
+      const dayPlans = Array.isArray(plans[dayKey]) ? [...plans[dayKey]] : [];
+      plans[dayKey] = dayPlans.filter((plan) => plan.id !== cardioId);
+      const nextOrder = normalizeDayOrder(prev.dayOrder, prev.days, prev.intervalPlans, plans, { includeEmpty: true });
+      nextOrder[dayKey] = (nextOrder[dayKey] || []).filter(
+        (item) => item.type !== 'cardio' || item.id !== cardioId,
+      );
+      return { ...prev, cardioPlans: plans, dayOrder: nextOrder };
     });
   };
 
@@ -429,26 +603,33 @@ function WorkoutHub() {
       if (!prev) return prev;
       const nextDays = clonePlan(prev.days);
       const dayExercises = Array.isArray(nextDays[dayKey]) ? [...nextDays[dayKey]] : [];
+      const removed = dayExercises[index];
       dayExercises.splice(index, 1);
       nextDays[dayKey] = dayExercises;
-      return { ...prev, days: nextDays };
+      const nextOrder = normalizeDayOrder(prev.dayOrder, nextDays, prev.intervalPlans, prev.cardioPlans, { includeEmpty: true });
+      if (removed?.id) {
+        nextOrder[dayKey] = (nextOrder[dayKey] || []).filter(
+          (item) => item.type !== 'exercise' || item.id !== removed.id,
+        );
+      }
+      return { ...prev, days: nextDays, dayOrder: nextOrder };
     });
   };
 
-  const handleReorderExercise = (dayKey, index, direction) => {
+  const handleReorderItem = (dayKey, index, direction) => {
     setEditDraft((prev) => {
       if (!prev) return prev;
-      const nextDays = clonePlan(prev.days);
-      const dayExercises = Array.isArray(nextDays[dayKey]) ? [...nextDays[dayKey]] : [];
+      const nextOrder = normalizeDayOrder(prev.dayOrder, prev.days, prev.intervalPlans, prev.cardioPlans, { includeEmpty: true });
+      const dayOrder = Array.isArray(nextOrder[dayKey]) ? [...nextOrder[dayKey]] : [];
       const targetIndex = index + direction;
-      if (targetIndex < 0 || targetIndex >= dayExercises.length) {
+      if (targetIndex < 0 || targetIndex >= dayOrder.length) {
         return prev;
       }
-      const temp = dayExercises[index];
-      dayExercises[index] = dayExercises[targetIndex];
-      dayExercises[targetIndex] = temp;
-      nextDays[dayKey] = dayExercises;
-      return { ...prev, days: nextDays };
+      const temp = dayOrder[index];
+      dayOrder[index] = dayOrder[targetIndex];
+      dayOrder[targetIndex] = temp;
+      nextOrder[dayKey] = dayOrder;
+      return { ...prev, dayOrder: nextOrder };
     });
   };
 
@@ -465,107 +646,95 @@ function WorkoutHub() {
     });
   };
 
-  const handleIntervalTitleChange = (dayKey, value) => {
+  const handleIntervalTitleChange = (dayKey, intervalId, value) => {
     setEditDraft((prev) => {
       if (!prev) return prev;
       const plans = cloneIntervals(prev.intervalPlans || {});
-      plans[dayKey] = {
-        title: value,
-        segments: Array.isArray(plans[dayKey]?.segments) ? [...plans[dayKey].segments] : [],
-      };
+      const dayPlans = Array.isArray(plans[dayKey]) ? [...plans[dayKey]] : [];
+      plans[dayKey] = dayPlans.map((plan) =>
+        plan.id === intervalId ? { ...plan, title: value } : plan,
+      );
       return { ...prev, intervalPlans: plans };
     });
   };
 
-const handleIntervalSegmentChange = (dayKey, index, field, value) => {
+  const handleIntervalSegmentChange = (dayKey, intervalId, index, field, value) => {
     setEditDraft((prev) => {
       if (!prev) return prev;
       const plans = cloneIntervals(prev.intervalPlans || {});
-      const current = plans[dayKey] || { title: '', segments: [] };
-      const segments = Array.isArray(current.segments) ? [...current.segments] : [];
-      segments[index] = {
-        ...segments[index],
-        [field]: value,
-      };
-      if (field === 'duration') {
-        const seconds = parseDurationSeconds(value);
-        segments[index].minutes = Math.floor(seconds / 60).toString();
-        segments[index].seconds = (seconds % 60).toString().padStart(2, '0');
-      }
-      if (field === 'minutes' || field === 'seconds') {
-        const minutes = Number(segments[index].minutes) || 0;
-        const seconds = Number(segments[index].seconds) || 0;
-        const total = Math.max(0, minutes * 60 + seconds);
-        segments[index].duration = formatSeconds(total);
-        segments[index].minutes = Math.floor(total / 60).toString();
-        segments[index].seconds = (total % 60).toString().padStart(2, '0');
-      }
-      if (field === 'repeat') {
-        const repeatValue = Math.max(1, Number(value) || 1);
-        segments[index].repeat = repeatValue.toString();
-      }
-      plans[dayKey] = { ...current, segments };
+      const dayPlans = Array.isArray(plans[dayKey]) ? [...plans[dayKey]] : [];
+      plans[dayKey] = dayPlans.map((plan) => {
+        if (plan.id !== intervalId) return plan;
+        const segments = Array.isArray(plan.segments) ? [...plan.segments] : [];
+        segments[index] = { ...segments[index], [field]: value };
+        if (field === 'duration') {
+          const seconds = parseDurationSeconds(value);
+          segments[index].minutes = Math.floor(seconds / 60).toString();
+          segments[index].seconds = (seconds % 60).toString().padStart(2, '0');
+        }
+        if (field === 'minutes' || field === 'seconds') {
+          const minutes = Number(segments[index].minutes) || 0;
+          const seconds = Number(segments[index].seconds) || 0;
+          const total = Math.max(0, minutes * 60 + seconds);
+          segments[index].duration = formatSeconds(total);
+          segments[index].minutes = Math.floor(total / 60).toString();
+          segments[index].seconds = (total % 60).toString().padStart(2, '0');
+        }
+        if (field === 'repeat') {
+          const repeatValue = Math.max(1, Number(value) || 1);
+          segments[index].repeat = repeatValue.toString();
+        }
+        return { ...plan, segments };
+      });
       return { ...prev, intervalPlans: plans };
     });
   };
 
-  const handleAddIntervalSegment = (dayKey) => {
+  const handleAddIntervalSegment = (dayKey, intervalId) => {
     setEditDraft((prev) => {
       if (!prev) return prev;
       const plans = cloneIntervals(prev.intervalPlans || {});
-      const current = plans[dayKey] || { title: '', segments: [] };
-      const segments = Array.isArray(current.segments) ? [...current.segments] : [];
-      segments.push({ label: '', duration: '', repeat: '1' });
-      plans[dayKey] = { ...current, segments };
+      const dayPlans = Array.isArray(plans[dayKey]) ? [...plans[dayKey]] : [];
+      plans[dayKey] = dayPlans.map((plan) => {
+        if (plan.id !== intervalId) return plan;
+        const segments = Array.isArray(plan.segments) ? [...plan.segments] : [];
+        segments.push({ label: '', duration: '', repeat: '1' });
+        return { ...plan, segments };
+      });
       return { ...prev, intervalPlans: plans };
     });
   };
 
-  const handleRemoveIntervalSegment = (dayKey, index) => {
+  const handleRemoveIntervalSegment = (dayKey, intervalId, index) => {
     setEditDraft((prev) => {
       if (!prev) return prev;
       const plans = cloneIntervals(prev.intervalPlans || {});
-      const current = plans[dayKey] || { title: '', segments: [] };
-      const segments = Array.isArray(current.segments) ? [...current.segments] : [];
-      segments.splice(index, 1);
-      plans[dayKey] = { ...current, segments };
+      const dayPlans = Array.isArray(plans[dayKey]) ? [...plans[dayKey]] : [];
+      plans[dayKey] = dayPlans.map((plan) => {
+        if (plan.id !== intervalId) return plan;
+        const segments = Array.isArray(plan.segments) ? [...plan.segments] : [];
+        segments.splice(index, 1);
+        return { ...plan, segments };
+      });
       return { ...prev, intervalPlans: plans };
     });
   };
 
-  const handleCardioChange = (dayKey, field, value) => {
+  const handleCardioChange = (dayKey, cardioId, field, value) => {
     setEditDraft((prev) => {
       if (!prev) return prev;
       const plans = cloneCardioPlans(prev.cardioPlans || {});
-      plans[dayKey] = {
-        ...plans[dayKey],
-        [field]: value,
-      };
+      const dayPlans = Array.isArray(plans[dayKey]) ? [...plans[dayKey]] : [];
+      plans[dayKey] = dayPlans.map((plan) =>
+        plan.id === cardioId ? { ...plan, [field]: value } : plan,
+      );
       return { ...prev, cardioPlans: plans };
     });
   };
 
-  const handleDeloadConfigChange = (field, value) => {
-    setEditDraft((prev) => {
-      if (!prev) return prev;
-      const current = prev.deload || {};
-      let nextValue = value;
-      if (field === 'deloadPercent' || field === 'deloadFrequencyWeeks') {
-        nextValue = Number(value);
-      }
-      return {
-        ...prev,
-        deload: {
-          ...current,
-          [field]: nextValue,
-        },
-      };
-    });
-  };
-
-  const startIntervalTimer = (dayKey) => {
+  const startIntervalTimer = (dayKey, intervalId) => {
     unlockAudioContext();
-    const intervalPlan = plan.intervalPlans?.[dayKey];
+    const intervalPlan = (plan.intervalPlans?.[dayKey] || []).find((item) => item.id === intervalId);
     if (!intervalPlan) return;
     const segments = (intervalPlan.segments || [])
       .flatMap((segment) => {
@@ -583,6 +752,7 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
     }
     setTimerState({
       dayKey,
+      intervalId,
       segments,
       currentIndex: 0,
       remaining: segments[0].durationSeconds,
@@ -608,6 +778,7 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
       remaining: 0,
       currentIndex: 0,
       dayKey: null,
+      intervalId: null,
       segments: [],
     }));
   };
@@ -630,14 +801,17 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
   const restartOrRewindInterval = () => {
     setTimerState((prev) => {
       if (!prev.segments.length) return prev;
-      if (prev.remaining <= prev.segments[prev.currentIndex].durationSeconds - 2 && prev.remaining > 0) {
+      const currentSegment = prev.segments[prev.currentIndex];
+      if (!currentSegment) return prev;
+      const elapsed = currentSegment.durationSeconds - prev.remaining;
+      if (elapsed > 2) {
         return {
           ...prev,
-          remaining: prev.segments[prev.currentIndex].durationSeconds,
+          remaining: currentSegment.durationSeconds,
         };
       }
       if (prev.currentIndex === 0) {
-        return { ...prev, remaining: prev.segments[0].durationSeconds };
+        return { ...prev, remaining: currentSegment.durationSeconds };
       }
       const previousIndex = prev.currentIndex - 1;
       return {
@@ -689,11 +863,14 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
         }));
         const rawName = (editDraft.dayNames?.[dayKey] || '').trim();
         sanitizedDayNames[dayKey] = rawName || DAY_LABELS[dayKey];
-        const intervalPlan = editDraft.intervalPlans?.[dayKey] || { title: '', segments: [] };
-        sanitizedIntervals[dayKey] = {
-          title: (intervalPlan.title || '').trim(),
-          segments: Array.isArray(intervalPlan.segments)
-            ? intervalPlan.segments
+        const intervalPlans = Array.isArray(editDraft.intervalPlans?.[dayKey])
+          ? editDraft.intervalPlans[dayKey]
+          : [];
+        sanitizedIntervals[dayKey] = intervalPlans.map((plan, index) => ({
+          id: plan.id || `interval-${dayKey}-${index + 1}`,
+          title: (plan.title || '').trim(),
+          segments: Array.isArray(plan.segments)
+            ? plan.segments
                 .map((segment) => ({
                   label: (segment?.label || '').trim(),
                   duration: (() => {
@@ -710,38 +887,24 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
                 }))
                 .filter((segment) => segment.label || segment.duration)
             : [],
-        };
-        const cardioPlan = editDraft.cardioPlans?.[dayKey] || { title: '', duration: '', notes: '' };
-        sanitizedCardio[dayKey] = {
-          title: (cardioPlan.title || '').trim(),
-          duration: (cardioPlan.duration || '').trim(),
-          notes: (cardioPlan.notes || '').trim(),
-        };
+        }));
+        const cardioPlans = Array.isArray(editDraft.cardioPlans?.[dayKey])
+          ? editDraft.cardioPlans[dayKey]
+          : [];
+        sanitizedCardio[dayKey] = cardioPlans.map((plan, index) => ({
+          id: plan.id || `cardio-${dayKey}-${index + 1}`,
+          title: (plan.title || '').trim(),
+          duration: (plan.duration || '').trim(),
+          notes: (plan.notes || '').trim(),
+        }));
       });
-      const deloadDraftConfig = normalizeDeloadConfig(editDraft.deload || settings || {});
-      let nextAnchor = editDraft.deload?.deloadAnchorWeekId || settings?.deloadAnchorWeekId || null;
-      if (deloadDraftConfig.deloadEnabled) {
-        if (!settings?.deloadEnabled || !nextAnchor) {
-          nextAnchor = weekInfo.weekId;
-        }
-      } else {
-        nextAnchor = null;
-      }
-      const deloadPayload = {
-        deloadEnabled: deloadDraftConfig.deloadEnabled,
-        deloadPercent: deloadDraftConfig.deloadPercent,
-        deloadFrequencyWeeks: deloadDraftConfig.deloadFrequencyWeeks,
-        deloadAnchorWeekId: deloadDraftConfig.deloadEnabled ? nextAnchor : null,
-      };
-      await Promise.all([
-        savePlan(authState.user.uid, {
-          days: sanitizedDays,
-          dayNames: sanitizedDayNames,
-          intervalPlans: sanitizedIntervals,
-          cardioPlans: sanitizedCardio,
-        }),
-        updateSettings(authState.user.uid, deloadPayload),
-      ]);
+      await savePlan(authState.user.uid, {
+        days: sanitizedDays,
+        dayNames: sanitizedDayNames,
+        intervalPlans: sanitizedIntervals,
+        cardioPlans: sanitizedCardio,
+        dayOrder: editDraft.dayOrder,
+      });
       setIsEditing(false);
       setEditDraft(null);
     } catch (error) {
@@ -834,11 +997,13 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
     }
   };
 
-  const handleToggleIntervalComplete = async (dayKey) => {
+  const handleToggleIntervalComplete = async (dayKey, intervalId) => {
     if (!authState.user) return;
     try {
-      const nextValue = !completions.dayData?.[dayKey]?.intervalPlan?.completed;
-      await updateCompletion(authState.user.uid, weekInfo.weekId, dayKey, 'intervalPlan', {
+      const existing = completions.dayData?.[dayKey]?.intervalPlans?.[intervalId];
+      const legacy = completions.dayData?.[dayKey]?.intervalPlan;
+      const nextValue = !(existing?.completed || (legacy?.completed && !existing));
+      await updateCompletion(authState.user.uid, weekInfo.weekId, dayKey, { type: 'interval', id: intervalId }, {
         completed: nextValue,
       });
     } catch (error) {
@@ -846,11 +1011,13 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
     }
   };
 
-  const handleToggleCardioComplete = async (dayKey) => {
+  const handleToggleCardioComplete = async (dayKey, cardioId) => {
     if (!authState.user) return;
     try {
-      const nextValue = !completions.dayData?.[dayKey]?.cardioPlan?.completed;
-      await updateCompletion(authState.user.uid, weekInfo.weekId, dayKey, 'cardioPlan', {
+      const existing = completions.dayData?.[dayKey]?.cardioPlans?.[cardioId];
+      const legacy = completions.dayData?.[dayKey]?.cardioPlan;
+      const nextValue = !(existing?.completed || (legacy?.completed && !existing));
+      await updateCompletion(authState.user.uid, weekInfo.weekId, dayKey, { type: 'cardio', id: cardioId }, {
         completed: nextValue,
       });
     } catch (error) {
@@ -859,28 +1026,41 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
   };
 
   const dayExercises = useMemo(() => plan.days?.[selectedDay] || [], [plan, selectedDay]);
+  const dayOrder = useMemo(
+    () => normalizeDayOrder(plan.dayOrder, plan.days, plan.intervalPlans, plan.cardioPlans)[selectedDay] || [],
+    [plan.dayOrder, plan.days, plan.intervalPlans, plan.cardioPlans, selectedDay]
+  );
   const dayWeights = weights[selectedDay]?.exercises || {};
   const dayCompletion = completions.dayData?.[selectedDay]?.exercises || {};
-  const intervalCompletion = completions.dayData?.[selectedDay]?.intervalPlan || {};
-  const cardioCompletion = completions.dayData?.[selectedDay]?.cardioPlan || {};
+  const intervalCompletionMap = completions.dayData?.[selectedDay]?.intervalPlans || {};
+  const cardioCompletionMap = completions.dayData?.[selectedDay]?.cardioPlans || {};
+  const legacyIntervalCompletion = completions.dayData?.[selectedDay]?.intervalPlan || null;
+  const legacyCardioCompletion = completions.dayData?.[selectedDay]?.cardioPlan || null;
   const deloadState = useMemo(
     () => computeDeloadState(settings, weekInfo.weekId),
     [settings, weekInfo.weekId]
   );
   const isDeloadWeek = deloadState.isDeloadWeek;
-  const hasIntervalContent = useMemo(() => {
-    const current = plan.intervalPlans?.[selectedDay];
-    if (!current) return false;
-    const hasSegments = Array.isArray(current.segments) && current.segments.length > 0;
-    return Boolean(current.title || hasSegments);
-  }, [plan.intervalPlans, selectedDay]);
-  const hasCardioContent = useMemo(() => {
-    const current = plan.cardioPlans?.[selectedDay];
-    if (!current) return false;
-    return Boolean(current.title || current.duration || current.notes);
-  }, [plan.cardioPlans, selectedDay]);
+  const dayIntervalPlans = useMemo(
+    () => Array.isArray(plan.intervalPlans?.[selectedDay]) ? plan.intervalPlans[selectedDay] : [],
+    [plan.intervalPlans, selectedDay],
+  );
+  const dayCardioPlans = useMemo(
+    () => Array.isArray(plan.cardioPlans?.[selectedDay]) ? plan.cardioPlans[selectedDay] : [],
+    [plan.cardioPlans, selectedDay],
+  );
+  const hasIntervalContent = useMemo(
+    () => dayIntervalPlans.some((planItem) => hasIntervalPlanContent(planItem)),
+    [dayIntervalPlans],
+  );
+  const hasCardioContent = useMemo(
+    () => dayCardioPlans.some((planItem) => hasCardioPlanContent(planItem)),
+    [dayCardioPlans],
+  );
 
   const progress = useMemo(() => {
+    const intervalPlansWithContent = dayIntervalPlans.filter((planItem) => hasIntervalPlanContent(planItem));
+    const cardioPlansWithContent = dayCardioPlans.filter((planItem) => hasCardioPlanContent(planItem));
     const totals = dayExercises.reduce(
       (acc, exercise) => {
         acc.totalExercises += 1;
@@ -891,23 +1071,36 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
       },
       { completedExercises: 0, totalExercises: 0 }
     );
-    if (hasIntervalContent) {
+    intervalPlansWithContent.forEach((planItem, index) => {
       totals.totalExercises += 1;
-      if (intervalCompletion.completed) {
+      const completion = intervalCompletionMap[planItem.id]
+        || (legacyIntervalCompletion && intervalPlansWithContent.length === 1 ? legacyIntervalCompletion : null);
+      if (completion?.completed) {
         totals.completedExercises += 1;
       }
-    }
-    if (hasCardioContent) {
+    });
+    cardioPlansWithContent.forEach((planItem, index) => {
       totals.totalExercises += 1;
-      if (cardioCompletion.completed) {
+      const completion = cardioCompletionMap[planItem.id]
+        || (legacyCardioCompletion && cardioPlansWithContent.length === 1 ? legacyCardioCompletion : null);
+      if (completion?.completed) {
         totals.completedExercises += 1;
       }
-    }
+    });
     const pct = totals.totalExercises === 0
       ? 0
       : Math.round((totals.completedExercises / totals.totalExercises) * 100);
     return { ...totals, pct };
-  }, [dayExercises, dayCompletion, hasIntervalContent, hasCardioContent, intervalCompletion.completed, cardioCompletion.completed]);
+  }, [
+    dayExercises,
+    dayCompletion,
+    dayIntervalPlans,
+    dayCardioPlans,
+    intervalCompletionMap,
+    cardioCompletionMap,
+    legacyIntervalCompletion,
+    legacyCardioCompletion,
+  ]);
 
   if (authState.loading) {
     return (
@@ -933,8 +1126,8 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
 
   return (
     <main className={pageClassName}>
-      <header className="workout-hero">
-        <div>
+      <header className="workout-hero workout-hero--with-actions">
+        <div className="workout-hero__content">
             <h1>{headerTitle}</h1>
           <p className="help-text">
             {dayLabel} • Week of {getWeekLabel(weekInfo)} • Progress {progress.pct}%
@@ -943,17 +1136,19 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
         <div className="workout-hero__actions">
           <button
             type="button"
-            className="btn btn--secondary"
-            onClick={() => navigate('/workout/settings')}
+            className="workout-hero__icon-btn"
+            onClick={() => navigate('/workout/data')}
+            aria-label="Workout data"
           >
-            Settings
+            <img src="/icons/chart.svg" alt="" aria-hidden="true" />
           </button>
           <button
             type="button"
-            className="btn btn--ghost"
-            onClick={() => navigate('/workout/data')}
+            className="workout-hero__icon-btn"
+            onClick={() => navigate('/workout/settings')}
+            aria-label="Workout settings"
           >
-            Data
+            <img src="/icons/gear.svg" alt="" aria-hidden="true" />
           </button>
         </div>
       </header>
@@ -989,20 +1184,23 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
           dayKey={selectedDay}
           dayName={editDraft.dayNames?.[selectedDay] || ''}
           days={editDraft.days}
-          intervalPlan={editDraft.intervalPlans?.[selectedDay]}
-          cardioPlan={editDraft.cardioPlans?.[selectedDay]}
-          deloadConfig={editDraft.deload}
+          intervalPlans={editDraft.intervalPlans?.[selectedDay] || []}
+          cardioPlans={editDraft.cardioPlans?.[selectedDay] || []}
+          dayOrder={editDraft.dayOrder}
           onChange={handlePlanChange}
           onAdd={handleAddExercise}
+          onAddInterval={handleAddIntervalItem}
+          onAddCardio={handleAddCardioItem}
           onRemove={handleRemoveExercise}
-          onReorder={handleReorderExercise}
+          onRemoveInterval={handleRemoveIntervalItem}
+          onRemoveCardio={handleRemoveCardioItem}
+          onReorder={handleReorderItem}
           onDayNameChange={handleDayNameChange}
           onIntervalTitleChange={handleIntervalTitleChange}
           onIntervalSegmentChange={handleIntervalSegmentChange}
           onIntervalSegmentAdd={handleAddIntervalSegment}
           onIntervalSegmentRemove={handleRemoveIntervalSegment}
           onCardioChange={handleCardioChange}
-          onDeloadChange={handleDeloadConfigChange}
           onSave={handleSavePlan}
           onCancel={handleCancelEditing}
           saving={planSaving}
@@ -1013,39 +1211,66 @@ const handleIntervalSegmentChange = (dayKey, index, field, value) => {
           {dayExercises.length === 0 && !hasIntervalContent && !hasCardioContent && (
             <p className="help-text">No exercises yet. Switch to edit mode to design this day.</p>
           )}
-          {dayExercises.map((exercise) => (
-            <ExerciseCard
-              key={exercise.id}
-              exercise={exercise}
-              weights={dayWeights[exercise.id]?.setWeights || []}
-              unit={settings?.unitSystem || 'lbs'}
-              completion={dayCompletion[exercise.id]}
-              onWeightChange={handleWeightChange}
-              onToggleExerciseComplete={handleToggleExerciseComplete}
-              status={weightStatuses[exercise.id]}
-              deloadState={deloadState}
-            />
-          ))}
-          <IntervalPlanView
-            plan={plan.intervalPlans?.[selectedDay]}
-            onStart={() => startIntervalTimer(selectedDay)}
-            onToggleComplete={() => handleToggleIntervalComplete(selectedDay)}
-            isComplete={!!intervalCompletion.completed}
-          />
-          <IntervalTimerPlayer
-            timer={timerState}
-            onPause={pauseIntervalTimer}
-            onResume={resumeIntervalTimer}
-            onReset={resetIntervalTimer}
-            onSkip={skipIntervalSegment}
-            onRestart={restartOrRewindInterval}
-            activeDay={selectedDay}
-          />
-          <CardioPlanView
-            plan={plan.cardioPlans?.[selectedDay]}
-            onToggleComplete={() => handleToggleCardioComplete(selectedDay)}
-            isComplete={!!cardioCompletion.completed}
-          />
+          {dayOrder.map((item, index) => {
+            if (item.type === 'exercise') {
+              const exercise = dayExercises.find((entry) => entry.id === item.id);
+              if (!exercise) return null;
+              return (
+                <ExerciseCard
+                  key={exercise.id}
+                  exercise={exercise}
+                  weights={dayWeights[exercise.id]?.setWeights || []}
+                  unit={settings?.unitSystem || 'lbs'}
+                  completion={dayCompletion[exercise.id]}
+                  onWeightChange={handleWeightChange}
+                  onToggleExerciseComplete={handleToggleExerciseComplete}
+                  status={weightStatuses[exercise.id]}
+                  deloadState={deloadState}
+                />
+              );
+            }
+            if (item.type === 'interval') {
+              const intervalPlan = dayIntervalPlans.find((planItem) => planItem.id === item.id);
+              if (!intervalPlan || !hasIntervalPlanContent(intervalPlan)) return null;
+              const completion = intervalCompletionMap[intervalPlan.id]
+                || (legacyIntervalCompletion && dayIntervalPlans.length === 1 ? legacyIntervalCompletion : {});
+              return (
+                <Fragment key={`interval-${intervalPlan.id}`}>
+                  <IntervalPlanView
+                    plan={intervalPlan}
+                    onStart={() => startIntervalTimer(selectedDay, intervalPlan.id)}
+                    onToggleComplete={() => handleToggleIntervalComplete(selectedDay, intervalPlan.id)}
+                    isComplete={!!completion.completed}
+                  />
+                  <IntervalTimerPlayer
+                    timer={timerState}
+                    intervalId={intervalPlan.id}
+                    onPause={pauseIntervalTimer}
+                    onResume={resumeIntervalTimer}
+                    onReset={resetIntervalTimer}
+                    onSkip={skipIntervalSegment}
+                    onRestart={restartOrRewindInterval}
+                    activeDay={selectedDay}
+                  />
+                </Fragment>
+              );
+            }
+            if (item.type === 'cardio') {
+              const cardioPlan = dayCardioPlans.find((planItem) => planItem.id === item.id);
+              if (!cardioPlan || !hasCardioPlanContent(cardioPlan)) return null;
+              const completion = cardioCompletionMap[cardioPlan.id]
+                || (legacyCardioCompletion && dayCardioPlans.length === 1 ? legacyCardioCompletion : {});
+              return (
+                <CardioPlanView
+                  key={`cardio-${cardioPlan.id}`}
+                  plan={cardioPlan}
+                  onToggleComplete={() => handleToggleCardioComplete(selectedDay, cardioPlan.id)}
+                  isComplete={!!completion.completed}
+                />
+              );
+            }
+            return null;
+          })}
           {!isEditing && (
             <div className="workout-edit-cta">
               <button className="btn" onClick={handleStartEditing}>
@@ -1310,20 +1535,24 @@ function ExerciseCard({
     >
       <div className="exercise-card__head">
         <div className="exercise-card__title exercise-card__title--with-meta">
-          <h3>{exercise.name}</h3>
-          <span className="exercise-card__sets">{sets} sets × {repsLabel}</span>
-        </div>
-        <div className="exercise-card__meta">
-          <button
-            type="button"
-            className="exercise-card__toggle"
-            onClick={handleToggleDetails}
-            aria-expanded={expanded}
-            aria-label={expanded ? 'Hide details' : 'Show details'}
-          >
-            <span aria-hidden="true">{expanded ? ' − ' : ' + '}</span>
-          </button>
-          {isCompleted && <span className="exercise-card__badge">Completed</span>}
+          <div className="exercise-card__title-text">
+            <h3>{exercise.name}</h3>
+            <div className="exercise-card__title-right">
+              {isCompleted && <span className="exercise-card__badge">Completed</span>}
+              <button
+                type="button"
+                className="exercise-card__toggle"
+                onClick={handleToggleDetails}
+                aria-expanded={expanded}
+                aria-label={expanded ? 'Hide details' : 'Show details'}
+              >
+                <span aria-hidden="true">{expanded ? ' − ' : ' + '}</span>
+              </button>
+            </div>
+          </div>
+          <div className="exercise-card__meta-line">
+            <span className="exercise-card__sets">{sets} sets × {repsLabel}</span>
+          </div>
         </div>
       </div>
       {expanded && (
@@ -1393,12 +1622,16 @@ function EditPanel({
   dayKey,
   dayName,
   days,
-  intervalPlan,
-  cardioPlan,
-  deloadConfig,
+  intervalPlans,
+  cardioPlans,
+  dayOrder,
   onChange,
   onAdd,
+  onAddInterval,
+  onAddCardio,
   onRemove,
+  onRemoveInterval,
+  onRemoveCardio,
   onReorder,
   onDayNameChange,
   onIntervalTitleChange,
@@ -1406,13 +1639,22 @@ function EditPanel({
   onIntervalSegmentAdd,
   onIntervalSegmentRemove,
   onCardioChange,
-  onDeloadChange,
   onSave,
   onCancel,
   saving,
   error,
 }) {
   const exercises = days?.[dayKey] || [];
+  const exerciseIndexById = new Map(
+    exercises.filter((exercise) => exercise?.id).map((exercise, index) => [exercise.id, index]),
+  );
+  const orderedItems = normalizeDayOrder(
+    dayOrder,
+    days,
+    { [dayKey]: intervalPlans },
+    { [dayKey]: cardioPlans },
+    { includeEmpty: true },
+  )[dayKey] || [];
   return (
     <div className="workout-edit">
       <div className="workout-edit__toolbar">
@@ -1434,79 +1676,172 @@ function EditPanel({
       {exercises.length === 0 && (
         <p className="help-text">No exercises yet. Add one to start building this day.</p>
       )}
-      {exercises.map((exercise, index) => (
-        <article key={exercise.id || index} className="exercise-editor">
-          <div className="exercise-editor__grid">
-            <label>
-              Name
-              <input
-                type="text"
-                value={exercise.name}
-                onChange={(event) => onChange(dayKey, index, 'name', event.target.value)}
+      {orderedItems.map((item, orderIndex) => {
+        if (item.type === 'exercise') {
+          const exerciseIndex = exerciseIndexById.get(item.id);
+          const exercise = exerciseIndex !== undefined ? exercises[exerciseIndex] : null;
+          if (!exercise) return null;
+          return (
+            <article key={exercise.id || orderIndex} className="exercise-editor">
+              <div className="exercise-editor__grid">
+                <label>
+                  Name
+                  <input
+                    type="text"
+                    value={exercise.name}
+                    onChange={(event) => onChange(dayKey, exerciseIndex, 'name', event.target.value)}
+                  />
+                </label>
+                <label>
+                  Sets
+                  <input
+                    type="number"
+                    min="1"
+                    value={exercise.sets}
+                    onChange={(event) => onChange(dayKey, exerciseIndex, 'sets', Number(event.target.value))}
+                  />
+                </label>
+                <label>
+                  Reps
+                  <input
+                    type="text"
+                    value={exercise.reps ?? ''}
+                    placeholder="e.g., 8-10 reps or ✅"
+                    onChange={(event) => onChange(dayKey, exerciseIndex, 'reps', event.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="exercise-editor__actions">
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => onReorder(dayKey, orderIndex, -1)}
+                  disabled={orderIndex === 0}
+                >
+                  Move up
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => onReorder(dayKey, orderIndex, 1)}
+                  disabled={orderIndex === orderedItems.length - 1}
+                >
+                  Move down
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => onRemove(dayKey, exerciseIndex)}
+                  aria-label="Remove exercise"
+                >
+                  <img src="/icons/trash.svg" alt="" aria-hidden="true" />
+                </button>
+              </div>
+            </article>
+          );
+        }
+        if (item.type === 'interval') {
+          const intervalPlan = intervalPlans.find((plan) => plan.id === item.id);
+          if (!intervalPlan) return null;
+          return (
+            <article key={`interval-${orderIndex}`} className="exercise-editor">
+              <IntervalPlanEditor
+                plan={intervalPlan}
+                onTitleChange={(value) => onIntervalTitleChange(dayKey, intervalPlan.id, value)}
+                onSegmentChange={(index, field, value) =>
+                  onIntervalSegmentChange(dayKey, intervalPlan.id, index, field, value)
+                }
+                onAddSegment={() => onIntervalSegmentAdd(dayKey, intervalPlan.id)}
+                onRemoveSegment={(index) => onIntervalSegmentRemove(dayKey, intervalPlan.id, index)}
               />
-            </label>
-            <label>
-              Sets
-              <input
-                type="number"
-                min="1"
-                value={exercise.sets}
-                onChange={(event) => onChange(dayKey, index, 'sets', Number(event.target.value))}
+              <div className="exercise-editor__actions">
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => onReorder(dayKey, orderIndex, -1)}
+                  disabled={orderIndex === 0}
+                >
+                  Move up
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => onReorder(dayKey, orderIndex, 1)}
+                  disabled={orderIndex === orderedItems.length - 1}
+                >
+                  Move down
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => onRemoveInterval(dayKey, intervalPlan.id)}
+                  aria-label="Remove interval timer"
+                >
+                  <img src="/icons/trash.svg" alt="" aria-hidden="true" />
+                </button>
+              </div>
+            </article>
+          );
+        }
+        if (item.type === 'cardio') {
+          const cardioPlan = cardioPlans.find((plan) => plan.id === item.id);
+          if (!cardioPlan) return null;
+          return (
+            <article key={`cardio-${orderIndex}`} className="exercise-editor">
+              <CardioPlanEditor
+                plan={cardioPlan}
+                onChange={(field, value) => onCardioChange(dayKey, cardioPlan.id, field, value)}
               />
-            </label>
-            <label>
-              Reps
-              <input
-                type="text"
-                value={exercise.reps ?? ''}
-                placeholder="e.g., 8-10 reps or ✅"
-                onChange={(event) => onChange(dayKey, index, 'reps', event.target.value)}
-              />
-            </label>
-          </div>
-          <div className="exercise-editor__actions">
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={() => onReorder(dayKey, index, -1)}
-              disabled={index === 0}
-            >
-              Move up
-            </button>
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={() => onReorder(dayKey, index, 1)}
-              disabled={index === exercises.length - 1}
-            >
-              Move down
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              onClick={() => onRemove(dayKey, index)}
-              aria-label="Remove exercise"
-            >
-              <img src="/icons/trash.svg" alt="" aria-hidden="true" />
-            </button>
-          </div>
-        </article>
-      ))}
-      <button className="btn btn--secondary" type="button" onClick={() => onAdd(dayKey)}>
-        Add exercise
-      </button>
-      <DeloadConfigEditor config={deloadConfig} onChange={onDeloadChange} />
-      <IntervalPlanEditor
-        plan={intervalPlan}
-        onTitleChange={(value) => onIntervalTitleChange(dayKey, value)}
-        onSegmentChange={(index, field, value) => onIntervalSegmentChange(dayKey, index, field, value)}
-        onAddSegment={() => onIntervalSegmentAdd(dayKey)}
-        onRemoveSegment={(index) => onIntervalSegmentRemove(dayKey, index)}
-      />
-      <CardioPlanEditor
-        plan={cardioPlan}
-        onChange={(field, value) => onCardioChange(dayKey, field, value)}
-      />
+              <div className="exercise-editor__actions">
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => onReorder(dayKey, orderIndex, -1)}
+                  disabled={orderIndex === 0}
+                >
+                  Move up
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => onReorder(dayKey, orderIndex, 1)}
+                  disabled={orderIndex === orderedItems.length - 1}
+                >
+                  Move down
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => onRemoveCardio(dayKey, cardioPlan.id)}
+                  aria-label="Remove cardio plan"
+                >
+                  <img src="/icons/trash.svg" alt="" aria-hidden="true" />
+                </button>
+              </div>
+            </article>
+          );
+        }
+        return null;
+      })}
+      <div className="workout-edit__add-actions">
+        <button className="btn btn--secondary" type="button" onClick={() => onAdd(dayKey)}>
+          Add Exercise
+        </button>
+        <button
+          className="btn btn--secondary"
+          type="button"
+          onClick={() => onAddInterval(dayKey)}
+        >
+          Add Interval Timer
+        </button>
+        <button
+          className="btn btn--secondary"
+          type="button"
+          onClick={() => onAddCardio(dayKey)}
+        >
+          Add Cardio Plan
+        </button>
+      </div>
     </div>
   );
 }
@@ -1540,30 +1875,32 @@ function IntervalPlanView({ plan, onStart, onToggleComplete, isComplete }) {
       <div className="exercise-card__head">
         <div className="exercise-card__title">
           <h3>{plan.title || 'Interval Timer'}</h3>
-          <span className="interval-total">
-            <span className="interval-total__label">Total time</span>
-            <span className="interval-total__value">
-              {formatDurationLabel(getIntervalPlanTotalSeconds(plan))}
+          <div className="interval-card__header-right">
+            {isComplete && <span className="exercise-card__badge">Completed</span>}
+            <span className="interval-total">
+              <span className="interval-total__label">Total time</span>
+              <span className="interval-total__value">
+                {formatDurationLabel(getIntervalPlanTotalSeconds(plan))}
+              </span>
             </span>
-          </span>
+            <button
+              type="button"
+              className="exercise-card__toggle"
+              aria-label={expanded ? 'Hide interval details' : 'Show interval details'}
+              onClick={(event) => {
+                event.stopPropagation();
+                setExpanded((prev) => !prev);
+              }}
+            >
+              <span aria-hidden="true">{expanded ? '−' : '+'}</span>
+            </button>
+          </div>
         </div>
         <div className="exercise-card__meta">
-          <button
-            type="button"
-            className="exercise-card__toggle"
-            aria-label={expanded ? 'Hide interval details' : 'Show interval details'}
-            onClick={(event) => {
-              event.stopPropagation();
-              setExpanded((prev) => !prev);
-            }}
-          >
-            <span aria-hidden="true">{expanded ? '−' : '+'}</span>
-        </button>
-        <button type="button" className="btn btn--secondary" onClick={(event) => { event.stopPropagation(); onStart(); }} disabled={!hasSegments}>
-          Start
-        </button>
-        {isComplete && <span className="exercise-card__badge">Completed</span>}
-      </div>
+          <button type="button" className="btn btn--secondary" onClick={(event) => { event.stopPropagation(); onStart(); }} disabled={!hasSegments}>
+            Start
+          </button>
+        </div>
       </div>
       {expanded && hasSegments && (
         <div className="exercise-card__body">
@@ -1584,8 +1921,8 @@ function IntervalPlanView({ plan, onStart, onToggleComplete, isComplete }) {
   );
 }
 
-function IntervalTimerPlayer({ timer, onPause, onResume, onReset, onSkip, onRestart, activeDay }) {
-  if (!timer.dayKey || timer.dayKey !== activeDay || !timer.segments.length) {
+function IntervalTimerPlayer({ timer, intervalId, onPause, onResume, onReset, onSkip, onRestart, activeDay }) {
+  if (!timer.dayKey || timer.dayKey !== activeDay || !timer.segments.length || timer.intervalId !== intervalId) {
     return null;
   }
   const current = timer.segments[timer.currentIndex];
@@ -1678,20 +2015,22 @@ function CardioPlanView({ plan, onToggleComplete, isComplete }) {
       <div className="exercise-card__head">
         <div className="exercise-card__title">
           <h3>{plan.title || 'Cardio Plan'}</h3>
+          <div className="exercise-card__title-right">
+            {isComplete && <span className="exercise-card__badge">Completed</span>}
+            <button
+              type="button"
+              className="exercise-card__toggle"
+              aria-label={expanded ? 'Hide cardio details' : 'Show cardio details'}
+              onClick={(event) => {
+                event.stopPropagation();
+                setExpanded((prev) => !prev);
+              }}
+            >
+              <span aria-hidden="true">{expanded ? ' − ' : ' + '}</span>
+            </button>
+          </div>
         </div>
         <div className="exercise-card__meta">
-          <button
-            type="button"
-            className="exercise-card__toggle"
-            aria-label={expanded ? 'Hide cardio details' : 'Show cardio details'}
-            onClick={(event) => {
-              event.stopPropagation();
-              setExpanded((prev) => !prev);
-            }}
-          >
-            <span aria-hidden="true">{expanded ? ' − ' : ' + '}</span>
-          </button>
-          {isComplete && <span className="exercise-card__badge">Completed</span>}
         </div>
       </div>
       {expanded && (
@@ -1701,57 +2040,6 @@ function CardioPlanView({ plan, onToggleComplete, isComplete }) {
         </div>
       )}
     </article>
-  );
-}
-
-function DeloadConfigEditor({ config, onChange }) {
-  const normalized = normalizeDeloadConfig(config || {});
-  const percentValue = normalized.deloadPercent ?? 15;
-  const frequencyValue = normalized.deloadFrequencyWeeks ?? 4;
-  return (
-    <section className="deload-config">
-      <div className="deload-config__head">
-        <h3>Deload Week</h3>
-        <span className="tag">Exercises only</span>
-      </div>
-      <label className="toggle">
-        <input
-          type="checkbox"
-          checked={Boolean(normalized.deloadEnabled)}
-          onChange={(event) => onChange('deloadEnabled', event.target.checked)}
-        />
-        Enable deload weeks
-      </label>
-      <div className="deload-config__grid">
-        <label>
-          Deload percentage
-          <input
-            type="number"
-            min="1"
-            max="90"
-            value={percentValue}
-            onChange={(event) => onChange('deloadPercent', event.target.value)}
-            disabled={!normalized.deloadEnabled}
-          />
-          <span className="help-text">Lower weights by this amount.</span>
-        </label>
-        <label>
-          Frequency (weeks)
-          <input
-            type="number"
-            min="2"
-            max="12"
-            value={frequencyValue}
-            onChange={(event) => onChange('deloadFrequencyWeeks', event.target.value)}
-            disabled={!normalized.deloadEnabled}
-          />
-          <span className="help-text">Every Nth week will deload.</span>
-        </label>
-      </div>
-      <p className="help-text">
-        Applies to exercise weights only. Trackers and cardio stay unchanged.
-      </p>
-    </section>
   );
 }
 

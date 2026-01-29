@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { deleteUser, getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { UNIT_OPTIONS } from '../../workout/constants';
+import { getWeekInfo } from '../../workout/date';
 import {
   deleteWorkoutData,
   exportWorkoutData,
   subscribeToSettings,
   updateSettings,
 } from '../../workout/service';
+import { normalizeDeloadConfig } from '../../workout/utils';
 import '../../styles/style.css';
 
 function WorkoutSettings() {
@@ -18,8 +20,13 @@ function WorkoutSettings() {
   const [settings, setSettings] = useState(null);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const [deloadStatus, setDeloadStatus] = useState('');
+  const [deloadError, setDeloadError] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deloadDraft, setDeloadDraft] = useState(null);
+  const deloadSaveTimer = useRef(null);
+  const deloadSyncRef = useRef(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (nextUser) => {
@@ -32,11 +39,35 @@ function WorkoutSettings() {
   useEffect(() => {
     if (!user) {
       setSettings(null);
+      setDeloadDraft(null);
       return;
     }
     const unsub = subscribeToSettings(user.uid, (data) => setSettings(data));
     return () => unsub();
   }, [user]);
+
+  useEffect(() => {
+    if (!settings) {
+      setDeloadDraft(null);
+      return;
+    }
+    const normalized = normalizeDeloadConfig(settings);
+    deloadSyncRef.current = true;
+    setDeloadDraft({
+      deloadEnabled: normalized.deloadEnabled,
+      deloadPercent: settings?.deloadPercent ?? normalized.deloadPercent,
+      deloadFrequencyWeeks: settings?.deloadFrequencyWeeks ?? normalized.deloadFrequencyWeeks,
+      deloadAnchorWeekId: settings?.deloadAnchorWeekId || normalized.deloadAnchorWeekId || null,
+    });
+  }, [settings]);
+
+  useEffect(() => {
+    return () => {
+      if (deloadSaveTimer.current) {
+        clearTimeout(deloadSaveTimer.current);
+      }
+    };
+  }, []);
 
   const handleUnitChange = async (value) => {
     if (!user) return;
@@ -59,6 +90,91 @@ function WorkoutSettings() {
       setError(err.message);
     }
   };
+
+  const handleDeloadChange = (field, value) => {
+    setDeloadDraft((prev) => {
+      if (!prev) return prev;
+      let nextValue = value;
+      if (field === 'deloadPercent' || field === 'deloadFrequencyWeeks') {
+        nextValue = value === '' ? '' : Number(value);
+      }
+      return {
+        ...prev,
+        [field]: nextValue,
+      };
+    });
+    setDeloadStatus('');
+    setDeloadError('');
+  };
+
+  const handleSaveDeload = async (draft) => {
+    if (!user || !deloadDraft) return;
+    setDeloadError('');
+    setDeloadStatus('');
+    if (draft.deloadEnabled) {
+      if (draft.deloadFrequencyWeeks === '' || draft.deloadFrequencyWeeks === null) {
+        setDeloadError('Deload frequency is required.');
+        return;
+      }
+      if (Number(draft.deloadFrequencyWeeks) < 2) {
+        setDeloadError('Deload frequency must be at least 2 weeks.');
+        return;
+      }
+    }
+    const normalized = normalizeDeloadConfig(draft);
+    let nextAnchor = draft.deloadAnchorWeekId || settings?.deloadAnchorWeekId || null;
+    if (normalized.deloadEnabled) {
+      if (!nextAnchor) {
+        nextAnchor = getWeekInfo().weekId;
+      }
+    } else {
+      nextAnchor = null;
+    }
+    try {
+      await updateSettings(user.uid, {
+        deloadEnabled: normalized.deloadEnabled,
+        deloadPercent: normalized.deloadPercent,
+        deloadFrequencyWeeks: normalized.deloadFrequencyWeeks,
+        deloadAnchorWeekId: normalized.deloadEnabled ? nextAnchor : null,
+      });
+      setDeloadStatus('Deload settings saved.');
+    } catch (err) {
+      setDeloadError(err.message);
+    }
+  };
+
+  useEffect(() => {
+    if (!user || !deloadDraft) return;
+    if (deloadSyncRef.current) {
+      deloadSyncRef.current = false;
+      return;
+    }
+    if (deloadDraft.deloadFrequencyWeeks === '' || deloadDraft.deloadFrequencyWeeks === null) {
+      return;
+    }
+    const currentNormalized = normalizeDeloadConfig(settings || {});
+    const currentAnchor = settings?.deloadAnchorWeekId || currentNormalized.deloadAnchorWeekId || null;
+    const draftNormalized = normalizeDeloadConfig(deloadDraft);
+    if (
+      currentNormalized.deloadEnabled === draftNormalized.deloadEnabled
+      && currentNormalized.deloadPercent === draftNormalized.deloadPercent
+      && currentNormalized.deloadFrequencyWeeks === draftNormalized.deloadFrequencyWeeks
+      && currentAnchor === (deloadDraft.deloadAnchorWeekId || null)
+    ) {
+      return;
+    }
+    if (deloadSaveTimer.current) {
+      clearTimeout(deloadSaveTimer.current);
+    }
+    deloadSaveTimer.current = setTimeout(() => {
+      handleSaveDeload(deloadDraft);
+    }, 600);
+    return () => {
+      if (deloadSaveTimer.current) {
+        clearTimeout(deloadSaveTimer.current);
+      }
+    };
+  }, [deloadDraft, user]);
 
   const handleSignOut = async () => {
     await signOut(auth);
@@ -125,17 +241,25 @@ function WorkoutSettings() {
 
   return (
     <main className="workout-page">
-      <header className="workout-hero">
-          <div>
-            <h1>Account Settings</h1>
-            <p className="help-text">Signed in as {user.email}</p>
-          </div>
+      <header className="workout-hero workout-hero--settings">
+        <div>
+          <h1>Account Settings</h1>
+          <p className="help-text">Signed in as {user.email}</p>
+        </div>
         <button
           type="button"
-          className="btn btn--secondary"
+          className="workout-hero__back"
           onClick={() => navigate('/workout')}
+          aria-label="Back"
         >
-          Back
+          <img src="/icons/chevron-left.svg" alt="" aria-hidden="true" />
+        </button>
+        <button
+          className="btn btn--ghost workout-hero__signout"
+          type="button"
+          onClick={handleSignOut}
+        >
+          Sign out
         </button>
       </header>
       {status && <p className="status-banner">{status}</p>}
@@ -182,16 +306,57 @@ function WorkoutSettings() {
       </section>
 
       <section className="workout-panel">
-        <h2>Data</h2>
-        <p className="help-text">Export a JSON snapshot or sign out wherever you are.</p>
-        <div className="settings-actions">
-          <button className="btn" type="button" onClick={handleExport}>
-            Export workout data
-          </button>
-          <button className="btn btn--secondary" type="button" onClick={handleSignOut}>
-            Sign out
-          </button>
-        </div>
+        <h2>Deload weeks</h2>
+        <p className="help-text">Control how often deload weeks occur and how much weights drop.</p>
+        {deloadDraft && (
+          <>
+            <div className="deload-config">
+              <div className="deload-config__head">
+                <h3>Deload cadence</h3>
+                <span className="tag">Exercises only</span>
+              </div>
+              <label className="deload-toggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(deloadDraft.deloadEnabled)}
+                  onChange={(event) => handleDeloadChange('deloadEnabled', event.target.checked)}
+                />
+                <span>Enable deload weeks</span>
+              </label>
+              <div className="deload-config__grid">
+                <label>
+                  Deload percentage
+                  <input
+                    type="number"
+                    min="1"
+                    max="90"
+                    value={deloadDraft.deloadPercent === '' ? '' : deloadDraft.deloadPercent}
+                    onChange={(event) => handleDeloadChange('deloadPercent', event.target.value)}
+                    disabled={!deloadDraft.deloadEnabled}
+                  />
+                  <span className="help-text">Lower weights by this amount.</span>
+                </label>
+                <label>
+                  Frequency (weeks)
+                  <input
+                    type="number"
+                    min="2"
+                    max="12"
+                    value={deloadDraft.deloadFrequencyWeeks === '' ? '' : deloadDraft.deloadFrequencyWeeks}
+                    onChange={(event) => handleDeloadChange('deloadFrequencyWeeks', event.target.value)}
+                    disabled={!deloadDraft.deloadEnabled}
+                  />
+                  <span className="help-text">Every Nth week will deload.</span>
+                </label>
+              </div>
+              <p className="help-text">
+                Applies to exercise weights only. Trackers and cardio stay unchanged.
+              </p>
+              {deloadStatus && <p className="status-banner">{deloadStatus}</p>}
+              {deloadError && <p className="form-error">{deloadError}</p>}
+            </div>
+          </>
+        )}
       </section>
 
       <section className="workout-panel workout-panel--danger">

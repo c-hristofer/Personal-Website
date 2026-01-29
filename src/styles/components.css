@@ -851,6 +851,18 @@ p ol li {
   gap: var(--space-3);
 }
 
+.todo-bottom-toggles {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.todo-bottom-toggles .todo-button {
+  flex: 1 1 0;
+  text-align: center;
+}
+
 .account-actions .todo-button {
   flex: 1 1 0;
   text-align: center;
@@ -905,6 +917,15 @@ p ol li {
   }
 
   .account-actions .todo-button {
+    width: 100%;
+  }
+
+  .todo-bottom-toggles {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .todo-bottom-toggles .todo-button {
     width: 100%;
   }
 }

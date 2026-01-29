@@ -38,11 +38,11 @@ export const createDefaultDayNames = () => DAY_KEYS.reduce((acc, key) => {
 }, {});
 
 export const createEmptyIntervalPlans = () => DAY_KEYS.reduce((acc, key) => {
-  acc[key] = { title: '', segments: [] };
+  acc[key] = [];
   return acc;
 }, {});
 
 export const createEmptyCardioPlans = () => DAY_KEYS.reduce((acc, key) => {
-  acc[key] = { title: '', duration: '', notes: '' };
+  acc[key] = [];
   return acc;
 }, {});

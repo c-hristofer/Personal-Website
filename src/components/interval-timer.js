@@ -253,7 +253,7 @@ function IntervalTimerProject() {
       const currentSegment = prev.segments[prev.currentIndex];
       if (!currentSegment) return prev;
       const elapsed = currentSegment.durationSeconds - prev.remaining;
-      if (elapsed <= 2) {
+      if (elapsed > 2) {
         return {
           ...prev,
           remaining: currentSegment.durationSeconds,

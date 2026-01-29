@@ -525,7 +525,6 @@ function IntervalTimerProject() {
           <div className="exercise-card__title">
             <h3>{selectedPlan?.title || 'Interval Timer'}</h3>
             <span className="interval-total">
-              <span className="interval-total__label">Total time</span>
               <span className="interval-total__value">{formatDurationLabel(selectedPlanTotalSeconds)}</span>
             </span>
           </div>

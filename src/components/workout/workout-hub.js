@@ -1126,7 +1126,7 @@ function WorkoutHub() {
 
   return (
     <main className={pageClassName}>
-      <header className="workout-hero workout-hero--with-actions">
+      <header className="workout-hero workout-hero--settings">
         <div className="workout-hero__content">
             <h1>{headerTitle}</h1>
           <p className="help-text">
@@ -1878,7 +1878,6 @@ function IntervalPlanView({ plan, onStart, onToggleComplete, isComplete }) {
           <div className="interval-card__header-right">
             {isComplete && <span className="exercise-card__badge">Completed</span>}
             <span className="interval-total">
-              <span className="interval-total__label">Total time</span>
               <span className="interval-total__value">
                 {formatDurationLabel(getIntervalPlanTotalSeconds(plan))}
               </span>

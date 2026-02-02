@@ -16,6 +16,7 @@ import {
   DAY_KEYS,
   createDefaultDayNames,
   DAY_LABELS,
+  DAY_SHORT_LABELS,
   createEmptyIntervalPlans,
   createEmptyCardioPlans,
 } from './constants';
@@ -62,8 +63,28 @@ const normalizeSettingsPayload = (data = {}) => {
 
 const normalizeDays = (days = {}) => {
   const base = createEmptyPlanDays();
+  if (Array.isArray(days)) {
+    DAY_KEYS.forEach((key, index) => {
+      base[key] = Array.isArray(days[index]) ? days[index] : [];
+    });
+    return base;
+  }
+  const keyMap = Object.entries(DAY_LABELS).reduce((acc, [fullKey, label]) => {
+    acc[fullKey] = fullKey;
+    acc[label.toLowerCase()] = fullKey;
+    acc[DAY_SHORT_LABELS[fullKey].toLowerCase()] = fullKey;
+    return acc;
+  }, {});
+  Object.keys(days || {}).forEach((rawKey) => {
+    const normalizedKey = keyMap[(rawKey || '').toString().toLowerCase()];
+    if (normalizedKey) {
+      base[normalizedKey] = Array.isArray(days[rawKey]) ? days[rawKey] : [];
+    }
+  });
   DAY_KEYS.forEach((key) => {
-    base[key] = Array.isArray(days[key]) ? days[key] : [];
+    if (!Array.isArray(base[key])) {
+      base[key] = [];
+    }
   });
   return base;
 };
@@ -198,14 +219,16 @@ export const computeWeekExerciseSummaries = (days = {}, weightsByDay = {}) => {
     const exercises = Array.isArray(days[dayKey]) ? days[dayKey] : [];
     const dayWeights = weightsByDay[dayKey]?.exercises || {};
     exercises.forEach((exercise) => {
+      const nameKey = (exercise?.name || '').toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const summaryKey = nameKey || exercise.id;
       const entry = dayWeights[exercise.id] || {};
       const setWeights = Array.isArray(entry.setWeights) ? entry.setWeights : [];
       const normalized = setWeights.map((value) => (value ?? '').toString());
       const numericValues = normalized
         .map((value) => parseNumericWeight(value))
         .filter((value) => value !== null);
-      if (!summaries[exercise.id]) {
-        summaries[exercise.id] = {
+      if (!summaries[summaryKey]) {
+        summaries[summaryKey] = {
           name: exercise.name,
           value: null,
           source: 'max',
@@ -214,14 +237,17 @@ export const computeWeekExerciseSummaries = (days = {}, weightsByDay = {}) => {
         };
       }
       if (normalized.length) {
-        summaries[exercise.id].setsByDay[dayKey] = normalized;
+        const existing = summaries[summaryKey].setsByDay[dayKey] || [];
+        summaries[summaryKey].setsByDay[dayKey] = existing.length
+          ? [...existing, ...normalized]
+          : normalized;
       }
       if (numericValues.length) {
         const maxSet = Math.max(...numericValues);
-        summaries[exercise.id].value = summaries[exercise.id].value === null
+        summaries[summaryKey].value = summaries[summaryKey].value === null
           ? maxSet
-          : Math.max(summaries[exercise.id].value, maxSet);
-        summaries[exercise.id].hasNumericData = true;
+          : Math.max(summaries[summaryKey].value, maxSet);
+        summaries[summaryKey].hasNumericData = true;
       }
     });
   });
@@ -257,12 +283,15 @@ export const subscribeToPlan = (uid, callback) => {
     }
     bootstrapped = true;
     const data = snapshot.data();
+    const normalizedDays = normalizeDays(data.days);
+    const normalizedIntervals = normalizeIntervalPlans(data.intervalPlans);
+    const normalizedCardio = normalizeCardioPlans(data.cardioPlans);
     callback({
-      days: normalizeDays(data.days),
+      days: normalizedDays,
       dayNames: normalizeDayNames(data.dayNames),
-      intervalPlans: normalizeIntervalPlans(data.intervalPlans),
-      cardioPlans: normalizeCardioPlans(data.cardioPlans),
-      dayOrder: normalizeDayOrder(data.dayOrder, data.days, data.intervalPlans, data.cardioPlans),
+      intervalPlans: normalizedIntervals,
+      cardioPlans: normalizedCardio,
+      dayOrder: normalizeDayOrder(data.dayOrder, normalizedDays, normalizedIntervals, normalizedCardio),
       updatedAt: data.updatedAt || null,
     });
   }, (error) => {
@@ -368,6 +397,7 @@ export const upsertWorkoutHistory = (uid, weekId, payload) => {
     ...timestamps,
   }, { merge: true });
 };
+
 
 export const subscribeToCompletions = (uid, weekId, callback) => {
   if (!uid || !weekId) return () => {};

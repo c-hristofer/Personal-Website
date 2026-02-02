@@ -308,6 +308,7 @@ function WorkoutHub() {
     weightsSnapshot.current = weights;
   }, [weights]);
 
+
   const unlockAudioContext = useCallback(() => {
     const AudioContextCtor = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
     if (!AudioContextCtor) return null;
@@ -1446,8 +1447,8 @@ function ExerciseCard({
   deloadState,
 }) {
   const [expanded, setExpanded] = useState(true);
-  const [revealedBase, setRevealedBase] = useState({});
-  const revealTimersRef = useRef({});
+  const [showingBase, setShowingBase] = useState(false);
+  const [editingIndex, setEditingIndex] = useState(null);
   const sets = Number(exercise.sets) || 0;
   const repsLabel = exercise.reps ? exercise.reps.toString() : 'reps';
   const setWeights = Array.from({ length: sets }, (_, idx) => weights?.[idx] ?? '');
@@ -1456,43 +1457,12 @@ function ExerciseCard({
   const deloadPercent = deloadState?.deloadPercent ?? 15;
 
   useEffect(() => {
-    return () => {
-      Object.values(revealTimersRef.current).forEach((timer) => clearTimeout(timer));
-      revealTimersRef.current = {};
-    };
-  }, []);
-
-  useEffect(() => {
-    setRevealedBase({});
-    Object.values(revealTimersRef.current).forEach((timer) => clearTimeout(timer));
-    revealTimersRef.current = {};
+    setShowingBase(false);
+    setEditingIndex(null);
   }, [exercise.id, deloadActive]);
 
-  const handleRevealBase = (index) => {
-    const shouldEnable = !revealedBase[index];
-    setRevealedBase((prev) => {
-      const next = { ...prev };
-      if (shouldEnable) {
-        next[index] = true;
-      } else {
-        delete next[index];
-      }
-      return next;
-    });
-    if (revealTimersRef.current[index]) {
-      clearTimeout(revealTimersRef.current[index]);
-      delete revealTimersRef.current[index];
-    }
-    if (shouldEnable) {
-      revealTimersRef.current[index] = setTimeout(() => {
-        setRevealedBase((prev) => {
-          const next = { ...prev };
-          delete next[index];
-          return next;
-        });
-        delete revealTimersRef.current[index];
-      }, 4000);
-    }
+  const handleToggleBase = () => {
+    setShowingBase((prev) => !prev);
   };
 
   const handleCardToggle = () => {
@@ -1506,7 +1476,11 @@ function ExerciseCard({
 
   const handleCardClick = (event) => {
     const target = event.target;
-    if (target.closest('.exercise-card__toggle') || target.closest('.set-row__input')) {
+    if (
+      target.closest('.exercise-card__toggle')
+      || target.closest('.set-row__input')
+      || target.closest('.set-row__base-toggle')
+    ) {
       return;
     }
     handleCardToggle();
@@ -1552,6 +1526,18 @@ function ExerciseCard({
           </div>
           <div className="exercise-card__meta-line">
             <span className="exercise-card__sets">{sets} sets × {repsLabel}</span>
+            {deloadActive && showingBase && (
+              <span className="set-row__base-indicator">Base</span>
+            )}
+            {deloadActive && (
+              <button
+                type="button"
+                className="set-row__base-toggle"
+                onClick={handleToggleBase}
+              >
+                {showingBase ? 'Hide base' : 'View base'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1562,12 +1548,13 @@ function ExerciseCard({
               const baseRaw = value === undefined || value === null ? '' : value.toString();
               const numericBase = parseNumericWeight(baseRaw);
               const canAutoDeload = deloadActive && numericBase !== null;
-              const showingBase = Boolean(revealedBase[idx]);
               const deloadedValue = canAutoDeload
                 ? formatWeightValue(applyDeloadToValue(numericBase, deloadPercent)) || ''
                 : '';
-              const displayValue = showingBase || !canAutoDeload ? baseRaw : deloadedValue;
-              const notAuto = deloadActive && baseRaw && !canAutoDeload;
+              const isEditing = editingIndex === idx;
+              const displayValue = (!isEditing && deloadActive && !showingBase && deloadedValue)
+                ? deloadedValue
+                : baseRaw;
               return (
                 <div key={idx} className="set-row">
                   <span className="set-row__label">Set {idx + 1}</span>
@@ -1576,34 +1563,17 @@ function ExerciseCard({
                     type="text"
                     value={displayValue === '' ? '' : displayValue}
                     placeholder={unit}
+                    onFocus={() => setEditingIndex(idx)}
+                    onBlur={() => setEditingIndex((current) => (current === idx ? null : current))}
                     onChange={(event) =>
-                      onWeightChange(exercise.id, idx, event.target.value, {
-                        isDeloadedInput: canAutoDeload && !showingBase,
-                      })
+                      onWeightChange(exercise.id, idx, event.target.value)
                     }
                   />
                   <span className="set-row__unit">{unit}</span>
-                  {canAutoDeload && (
-                    <button
-                      type="button"
-                      className="set-row__base-link"
-                      onClick={() => handleRevealBase(idx)}
-                    >
-                      {showingBase ? 'Hide base' : 'View base'}
-                    </button>
-                  )}
                   <div className="set-row__meta">
-                    {canAutoDeload && !showingBase && (
-                      <span className="set-row__badge">Deloaded (auto)</span>
-                    )}
-                    {showingBase && (
+                    {deloadActive && isEditing && (
                       <span className="set-row__badge set-row__badge--base">
-                        Base: {baseRaw || '—'}
-                      </span>
-                    )}
-                    {notAuto && (
-                      <span className="set-row__badge set-row__badge--muted">
-                        Not auto-deloaded
+                        Editing base
                       </span>
                     )}
                   </div>
@@ -2047,7 +2017,7 @@ function IntervalPlanEditor({ plan, onTitleChange, onSegmentChange, onAddSegment
   return (
     <section className="interval-editor">
       <h3>Interval Timer</h3>
-      <label>
+      <label className="interval-editor__title">
         Title
         <input
           type="text"
@@ -2060,11 +2030,12 @@ function IntervalPlanEditor({ plan, onTitleChange, onSegmentChange, onAddSegment
             {(currentPlan.segments || []).map((segment, index) => (
               <div key={index} className="interval-editor__row">
                 <input
+                  className="interval-editor__name"
                   type="text"
-              value={segment.label || ''}
-              placeholder="Move name"
-              onChange={(event) => onSegmentChange(index, 'label', event.target.value)}
-            />
+                  value={segment.label || ''}
+                  placeholder="Move name"
+                  onChange={(event) => onSegmentChange(index, 'label', event.target.value)}
+                />
                 <div className="interval-editor__duration">
                   <input
                     type="number"
@@ -2084,6 +2055,7 @@ function IntervalPlanEditor({ plan, onTitleChange, onSegmentChange, onAddSegment
                   />
                 </div>
                 <input
+                  className="interval-editor__repeat"
                   type="number"
                   min="1"
                   value={segment.repeat || '1'}
@@ -2092,7 +2064,7 @@ function IntervalPlanEditor({ plan, onTitleChange, onSegmentChange, onAddSegment
                 />
                 <button
                   type="button"
-                  className="icon-button"
+                  className="icon-button interval-editor__delete"
               onClick={() => onRemoveSegment(index)}
               aria-label="Remove interval"
             >

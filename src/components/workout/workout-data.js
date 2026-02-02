@@ -108,12 +108,14 @@ function WorkoutData() {
     sortedHistory.forEach((doc) => {
       const summaries = doc.exerciseSummaries || {};
       Object.keys(summaries).forEach((exerciseId) => {
-        if (!map.has(exerciseId)) {
-          map.set(exerciseId, summaries[exerciseId]?.name || 'Exercise');
+        const name = summaries[exerciseId]?.name || 'Exercise';
+        const key = name.toLowerCase().trim();
+        if (!map.has(key)) {
+          map.set(key, { id: key, name });
         }
       });
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    return Array.from(map.values());
   }, [sortedHistory]);
 
   useEffect(() => {
@@ -154,11 +156,22 @@ function WorkoutData() {
         weekId: doc.weekId,
         label: formatWeekLabel(doc.weekId),
       };
-      selectedExercises.forEach((exerciseId) => {
-        const summary = doc.exerciseSummaries?.[exerciseId];
+      const mergedByName = new Map();
+      Object.values(doc.exerciseSummaries || {}).forEach((summary) => {
+        const name = (summary?.name || 'Exercise').toLowerCase().trim();
+        if (!mergedByName.has(name)) {
+          mergedByName.set(name, []);
+        }
         if (summary?.value !== undefined && summary.value !== null) {
+          mergedByName.get(name).push(Number(summary.value));
+        }
+      });
+      selectedExercises.forEach((exerciseId) => {
+        const values = mergedByName.get(exerciseId) || [];
+        if (values.length) {
+          const maxValue = Math.max(...values);
           const converted = convertUnitValue(
-            Number(summary.value),
+            maxValue,
             doc.unitSystem || 'lbs',
             targetUnit
           );
@@ -177,10 +190,27 @@ function WorkoutData() {
     const rows = [];
     docs.forEach((doc) => {
       const entries = doc.exerciseSummaries || {};
-      const exerciseIds = filterSet
-        ? Object.keys(entries).filter((key) => filterSet.has(key))
-        : Object.keys(entries);
-      if (!exerciseIds.length) {
+      const merged = new Map();
+      Object.keys(entries).forEach((exerciseId) => {
+        const summary = entries[exerciseId] || {};
+        const name = (summary.name || 'Exercise').toLowerCase().trim();
+        if (filterSet && !filterSet.has(name)) return;
+        if (!merged.has(name)) {
+          merged.set(name, {
+            name: summary.name || 'Exercise',
+            values: [],
+            hasNumericData: false,
+            source: summary.source || '',
+          });
+        }
+        const bucket = merged.get(name);
+        bucket.hasNumericData = bucket.hasNumericData || Boolean(summary.hasNumericData);
+        if (summary.value !== undefined && summary.value !== null) {
+          bucket.values.push(Number(summary.value));
+        }
+      });
+      const mergedList = Array.from(merged.values());
+      if (!mergedList.length) {
         rows.push({
           weekId: doc.weekId,
           weekStartISO: doc.weekStartISO || doc.weekId,
@@ -194,15 +224,15 @@ function WorkoutData() {
           updatedAt: doc.updatedAt || '',
         });
       } else {
-        exerciseIds.forEach((exerciseId) => {
-          const summary = entries[exerciseId] || {};
+        mergedList.forEach((summary) => {
+          const maxValue = summary.values.length ? Math.max(...summary.values) : '';
           rows.push({
             weekId: doc.weekId,
             weekStartISO: doc.weekStartISO || doc.weekId,
             unitSystem: doc.unitSystem || 'lbs',
-            exerciseId,
+            exerciseId: summary.name || '',
             exerciseName: summary.name || '',
-            value: summary.value ?? '',
+            value: maxValue === '' ? '' : maxValue,
             source: summary.source || '',
             hasNumericData: summary.hasNumericData ?? false,
             createdAt: doc.createdAt || '',
@@ -403,7 +433,7 @@ function WorkoutData() {
           )}
           {selectedExercises.length > 0 && (
             <div className="exercise-selected">
-              {selectedExercises.map((exerciseId, idx) => {
+        {selectedExercises.map((exerciseId, idx) => {
                 const option = exerciseOptions.find((opt) => opt.id === exerciseId);
                 const color = getColorForIndex(idx);
                 return (

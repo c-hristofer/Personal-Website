@@ -79,7 +79,8 @@ function ToDo() {
   const fetchReminders = async (user) => {
     const snapshot = await getDocs(collection(db, "reminders"));
     const recSnapshot = await getDocs(collection(db, "recurringReminders"));
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     const rawReminders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     const rawRecurring = recSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -87,13 +88,17 @@ function ToDo() {
     const filteredReminders = rawReminders.filter(r => r.userId === user.uid);
     const filteredRecurring = rawRecurring.filter(r => r.userId === user.uid);
 
-    setReminders(filteredReminders.map(r => ({
-      ...r,
-      pastDue: r.dueDate < today,
-      completed: !!r.completed,
-      completedAt: r.completedAt || null,
-      allDay: !!r.allDay,
-    })));
+    setReminders(filteredReminders.map(r => {
+      const dueDate = r.dueDate ? new Date(`${r.dueDate}T00:00:00`) : null;
+      const isPastDue = dueDate ? dueDate < today : false;
+      return {
+        ...r,
+        pastDue: isPastDue && !r.completed,
+        completed: !!r.completed,
+        completedAt: r.completedAt || null,
+        allDay: !!r.allDay,
+      };
+    }));
     setRecurringReminders(filteredRecurring.map(r => ({
       ...r,
       allDay: !!r.allDay,
@@ -251,6 +256,26 @@ const unmarkRecurringComplete = async (id, dateStr) => {
   }
 };
 
+const markRecurringSkipped = async (id, dateStr) => {
+  if (!id || !dateStr) return;
+  try {
+    const reminderRef = doc(db, "recurringReminders", id);
+    const snapshot = await getDoc(reminderRef);
+    const data = snapshot.data();
+    if (data.userId === auth.currentUser.uid) {
+      const updatedDates = new Set(data.skippedDates || []);
+      updatedDates.add(dateStr);
+      await updateDoc(reminderRef, { skippedDates: Array.from(updatedDates) });
+      fetchReminders(auth.currentUser);
+    } else {
+      alert("You do not have permission to update this recurring reminder.");
+    }
+  } catch (err) {
+    console.error("Failed to skip recurring reminder:", err.message);
+    alert("Unable to skip recurring reminder. Please check your permissions.");
+  }
+};
+
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) {
@@ -262,13 +287,16 @@ const unmarkRecurringComplete = async (id, dateStr) => {
 
   // Calculate start (Sunday) and end (Saturday) dates for the current week
   const today = new Date();
-  const startOfWeek = new Date(today);
+  const todayMidnight = new Date(today);
+  todayMidnight.setHours(0, 0, 0, 0);
+  const startOfWeek = new Date(todayMidnight);
   startOfWeek.setHours(0, 0, 0, 0);
   startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(endOfWeek.getDate() + 6);
   endOfWeek.setHours(23, 59, 59, 999);
   const weekRangeString = `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  const todayIndex = todayMidnight.getDay();
 
   const renderTimeChip = (item) => {
     if (item.allDay) {
@@ -294,8 +322,12 @@ const unmarkRecurringComplete = async (id, dateStr) => {
     });
     const recurringForDay = recurringReminders.filter(r => {
       const completedDates = r.completedDates || [];
-      const isCompletedToday = completedDates.includes(currentDate.toISOString().split('T')[0]);
-      return r.days.includes(day) && !isCompletedToday;
+      const skippedDates = r.skippedDates || [];
+      const dateKey = currentDate.toISOString().split('T')[0];
+      const isCompletedToday = completedDates.includes(dateKey);
+      const isSkippedToday = skippedDates.includes(dateKey);
+      const isPastDueDay = i < todayIndex;
+      return r.days.includes(day) && !isCompletedToday && !isSkippedToday && !isPastDueDay;
     });
 
     const combined = [...specificReminders, ...recurringForDay].sort((a, b) => {
@@ -333,7 +365,8 @@ const unmarkRecurringComplete = async (id, dateStr) => {
               event.stopPropagation();
               if (!r.id) return;
               if (isRecurringItem) {
-                deleteRecurringReminder(r.id);
+                const skipDate = currentDate.toISOString().split('T')[0];
+                markRecurringSkipped(r.id, skipDate);
               } else {
                 deleteReminder(r.id);
               }
@@ -381,6 +414,29 @@ const unmarkRecurringComplete = async (id, dateStr) => {
         </ul>
       </div>
     );
+  });
+
+  const recurringPastDue = recurringReminders.flatMap((reminder) => {
+    if (!Array.isArray(reminder.days) || reminder.days.length === 0) return [];
+    const completedDates = new Set(reminder.completedDates || []);
+    const skippedDates = new Set(reminder.skippedDates || []);
+    return reminder.days.flatMap((dayName) => {
+      const dayIndex = daysOfWeek.indexOf(dayName);
+      if (dayIndex === -1 || dayIndex >= todayIndex) return [];
+      const dueDate = new Date(startOfWeek);
+      dueDate.setDate(startOfWeek.getDate() + dayIndex);
+      const dueKey = dueDate.toISOString().split('T')[0];
+      if (completedDates.has(dueKey)) return [];
+      if (skippedDates.has(dueKey)) return [];
+      return [{
+        ...reminder,
+        id: reminder.id,
+        recurringId: reminder.id,
+        pastDueDate: dueKey,
+        pastDueDisplay: dueDate,
+        isRecurringPastDue: true,
+      }];
+    });
   });
 
   const toggleDay = (day) => {
@@ -587,7 +643,6 @@ const unmarkRecurringComplete = async (id, dateStr) => {
           Reminders for the Week ({weekRangeString})
         </h2>
         {showWeekly && weekLayout}
-        {showWeekly && weekLayout}
       </div>
 
       <div className="section todo-section">
@@ -647,16 +702,49 @@ const unmarkRecurringComplete = async (id, dateStr) => {
         <h2 onClick={() => setShowPastDue(!showPastDue)}>Past Due</h2>
         {showPastDue && (
           <ul className="reminder-list">
-            {reminders
-              .filter(r => r.pastDue)
-              .map(r => (
-                <li key={r.id} className="reminder-card reminder-card--past-due">
+            {[...reminders.filter(r => r.pastDue && !r.completed), ...recurringPastDue].map((r) => {
+              const isRecurringItem = r.isRecurringPastDue;
+              const handleToggle = () => {
+                if (isRecurringItem) {
+                  if (!r.recurringId || !r.pastDueDate) return;
+                  markRecurringComplete(r.recurringId, r.pastDueDate);
+                  return;
+                }
+                if (!r.id) return;
+                updateReminderCompletion(r.id, !r.completed, r);
+              };
+              const handleDelete = (event) => {
+                event.stopPropagation();
+                if (isRecurringItem) {
+                  if (!r.recurringId || !r.pastDueDate) return;
+                  markRecurringSkipped(r.recurringId, r.pastDueDate);
+                  return;
+                }
+                deleteReminder(r.id);
+              };
+              const dueLabel = isRecurringItem
+                ? formatDateDisplay(r.pastDueDate)
+                : r.dueDate && formatDateDisplay(r.dueDate);
+              return (
+                <li
+                  key={`${r.id}-${r.pastDueDate || 'single'}`}
+                  className="reminder-card reminder-card--past-due"
+                  role="button"
+                  tabIndex={0}
+                  onClick={handleToggle}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleToggle();
+                    }
+                  }}
+                >
                   <div className="reminder-card__body">
                     <div className="reminder-details">
                       <span className="reminder-title">{r.title}</span>
                       <span className="reminder-meta">
                         {renderTimeChip(r)}
-                        {r.dueDate && <span className="reminder-date">{formatDateDisplay(r.dueDate)}</span>}
+                        {dueLabel && <span className="reminder-date">{dueLabel}</span>}
                       </span>
                     </div>
                   </div>
@@ -664,14 +752,15 @@ const unmarkRecurringComplete = async (id, dateStr) => {
                     <button
                       type="button"
                       className="icon-button icon-button--trash"
-                      onClick={() => deleteReminder(r.id)}
-                      aria-label="Delete reminder"
+                      onClick={handleDelete}
+                      aria-label={isRecurringItem ? 'Delete recurring reminder' : 'Delete reminder'}
                     >
                       <img src="/icons/trash.svg" alt="" aria-hidden="true" />
                     </button>
                   </div>
                 </li>
-              ))}
+              );
+            })}
           </ul>
         )}
       </div>

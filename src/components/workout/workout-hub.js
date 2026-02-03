@@ -1625,6 +1625,16 @@ function EditPanel({
     { [dayKey]: cardioPlans },
     { includeEmpty: true },
   )[dayKey] || [];
+  const [pendingDelete, setPendingDelete] = useState(null);
+
+  useEffect(() => {
+    setPendingDelete(null);
+  }, [dayKey]);
+
+  const isPendingDelete = (type, id) => pendingDelete?.type === type && pendingDelete?.id === id;
+  const requestDelete = (type, id) => {
+    setPendingDelete((prev) => (prev?.type === type && prev?.id === id ? null : { type, id }));
+  };
   return (
     <div className="workout-edit">
       <div className="workout-edit__toolbar">
@@ -1698,14 +1708,37 @@ function EditPanel({
                 >
                   Move down
                 </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  onClick={() => onRemove(dayKey, exerciseIndex)}
-                  aria-label="Remove exercise"
-                >
-                  <img src="/icons/trash.svg" alt="" aria-hidden="true" />
-                </button>
+                {isPendingDelete('exercise', exercise.id) ? (
+                  <div className="interval-plan-confirm">
+                    <span className="interval-plan-confirm__label">Delete this exercise?</span>
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      onClick={() => {
+                        onRemove(dayKey, exerciseIndex);
+                        setPendingDelete(null);
+                      }}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      onClick={() => setPendingDelete(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => requestDelete('exercise', exercise.id)}
+                    aria-label="Remove exercise"
+                  >
+                    <img src="/icons/trash.svg" alt="" aria-hidden="true" />
+                  </button>
+                )}
               </div>
             </article>
           );
@@ -1741,14 +1774,37 @@ function EditPanel({
                 >
                   Move down
                 </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  onClick={() => onRemoveInterval(dayKey, intervalPlan.id)}
-                  aria-label="Remove interval timer"
-                >
-                  <img src="/icons/trash.svg" alt="" aria-hidden="true" />
-                </button>
+                {isPendingDelete('interval', intervalPlan.id) ? (
+                  <div className="interval-plan-confirm">
+                    <span className="interval-plan-confirm__label">Delete this interval timer?</span>
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      onClick={() => {
+                        onRemoveInterval(dayKey, intervalPlan.id);
+                        setPendingDelete(null);
+                      }}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      onClick={() => setPendingDelete(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => requestDelete('interval', intervalPlan.id)}
+                    aria-label="Remove interval timer"
+                  >
+                    <img src="/icons/trash.svg" alt="" aria-hidden="true" />
+                  </button>
+                )}
               </div>
             </article>
           );
@@ -1779,14 +1835,37 @@ function EditPanel({
                 >
                   Move down
                 </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  onClick={() => onRemoveCardio(dayKey, cardioPlan.id)}
-                  aria-label="Remove cardio plan"
-                >
-                  <img src="/icons/trash.svg" alt="" aria-hidden="true" />
-                </button>
+                {isPendingDelete('cardio', cardioPlan.id) ? (
+                  <div className="interval-plan-confirm">
+                    <span className="interval-plan-confirm__label">Delete this cardio plan?</span>
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      onClick={() => {
+                        onRemoveCardio(dayKey, cardioPlan.id);
+                        setPendingDelete(null);
+                      }}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      onClick={() => setPendingDelete(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => requestDelete('cardio', cardioPlan.id)}
+                    aria-label="Remove cardio plan"
+                  >
+                    <img src="/icons/trash.svg" alt="" aria-hidden="true" />
+                  </button>
+                )}
               </div>
             </article>
           );

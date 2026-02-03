@@ -72,6 +72,8 @@
   --transition-base: 0.2s ease-in-out;
   --border-width: 1px;
   --logo-filter: none;
+  --icon-filter: none;
+  --icon-on-primary-filter: invert(1) brightness(1.2);
 
   color-scheme: light;
   accent-color: var(--color-primary);
@@ -97,5 +99,7 @@
   --shadow-1: 0 6px 18px hsla(220, 80%, 5%, 0.55);
   --shadow-2: 0 12px 32px hsla(220, 80%, 5%, 0.65);
   --logo-filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.6)) brightness(1.15);
+  --icon-filter: invert(1) brightness(1.1);
+  --icon-on-primary-filter: invert(1) brightness(1.2);
   color-scheme: dark;
 }

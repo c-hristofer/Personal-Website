@@ -22,6 +22,7 @@ import WorkoutHub from './components/workout/workout-hub';
 import WorkoutSettings from './components/workout/workout-settings';
 import WorkoutData from './components/workout/workout-data';
 import IntervalTimerProject from './components/interval-timer';
+import IntervalTimerSettings from './components/interval-timer-settings';
 
 import './styles/style.css';
 
@@ -54,6 +55,7 @@ function App() {
             <Route path="/workout/settings" element={<WorkoutSettings />} />
             <Route path="/workout/data" element={<WorkoutData />} />
             <Route path="/interval-timer" element={<IntervalTimerProject />} />
+            <Route path="/interval-timer/settings" element={<IntervalTimerSettings />} />
           </Routes>
         </div>
       </div>

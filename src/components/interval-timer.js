@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { applyPersistencePreference } from '../utils/auth-persistence';
@@ -28,6 +29,42 @@ const formatDurationLabel = (value) => {
   return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
 };
 
+const getIntervalTimerSettings = () => {
+  if (typeof window === 'undefined') {
+    return { soundEnabled: true, viewPreference: 'split' };
+  }
+  try {
+    const raw = window.localStorage.getItem('intervalTimerSettings');
+    const parsed = raw ? JSON.parse(raw) : {};
+    const viewPreference = ['split', 'focus', 'last'].includes(parsed.viewPreference)
+      ? parsed.viewPreference
+      : 'split';
+    return {
+      soundEnabled: parsed.soundEnabled !== false,
+      viewPreference,
+    };
+  } catch (error) {
+    return { soundEnabled: true, viewPreference: 'split' };
+  }
+};
+
+const getStoredIntervalView = () => {
+  if (typeof window === 'undefined') return 'split';
+  try {
+    const value = window.localStorage.getItem('intervalTimerLastView');
+    return value === 'focus' ? 'focus' : 'split';
+  } catch (error) {
+    return 'split';
+  }
+};
+
+const getInitialIntervalView = () => {
+  const settings = getIntervalTimerSettings();
+  if (settings.viewPreference === 'focus') return 'focus';
+  if (settings.viewPreference === 'split') return 'split';
+  return getStoredIntervalView();
+};
+
 const getPlanTotalSeconds = (plan) => {
   if (!plan || !Array.isArray(plan.segments)) return 0;
   return plan.segments.reduce((total, segment) => {
@@ -41,6 +78,7 @@ const getPlanTotalSeconds = (plan) => {
 
 function IntervalTimerProject() {
   const auth = getAuth();
+  const navigate = useNavigate();
   const [authState, setAuthState] = useState({ user: null, loading: true });
   const defaultPlans = useMemo(() => ([
     { id: 'plan-1', title: 'Interval Timer', segments: [{ label: 'Work', minutes: 0, seconds: 30, repeat: 1 }] },
@@ -49,6 +87,12 @@ function IntervalTimerProject() {
   const [favoritePlanId, setFavoritePlanId] = useState(null);
   const [selectedPlanId, setSelectedPlanId] = useState('plan-1');
   const [plansLoaded, setPlansLoaded] = useState(false);
+  const [intervalView, setIntervalView] = useState(getInitialIntervalView);
+  const [deletePlanId, setDeletePlanId] = useState(null);
+  const selectedPlanIdRef = useRef('plan-1');
+  const initialLoadRef = useRef(true);
+  const [timerSettings, setTimerSettings] = useState(getIntervalTimerSettings);
+  const timerSettingsRef = useRef(getIntervalTimerSettings());
   const [timerState, setTimerState] = useState({
     segments: [],
     currentIndex: 0,
@@ -58,6 +102,8 @@ function IntervalTimerProject() {
   });
   const [isEditingPlan, setIsEditingPlan] = useState(false);
   const audioContextRef = useRef(null);
+  const intervalPlayerRef = useRef(null);
+  const hasAutoScrolledRef = useRef(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -65,6 +111,44 @@ function IntervalTimerProject() {
     });
     return () => unsub();
   }, [auth]);
+
+  useEffect(() => {
+    selectedPlanIdRef.current = selectedPlanId;
+  }, [selectedPlanId]);
+
+  useEffect(() => {
+    setDeletePlanId(null);
+  }, [selectedPlanId]);
+
+  useEffect(() => {
+    timerSettingsRef.current = timerSettings;
+  }, [timerSettings]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleSettingsChange = () => {
+      setTimerSettings(getIntervalTimerSettings());
+    };
+    window.addEventListener('storage', handleSettingsChange);
+    window.addEventListener('intervalTimerSettingsUpdated', handleSettingsChange);
+    return () => {
+      window.removeEventListener('storage', handleSettingsChange);
+      window.removeEventListener('intervalTimerSettingsUpdated', handleSettingsChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('intervalTimerLastView', intervalView);
+  }, [intervalView]);
+
+  useEffect(() => {
+    if (timerSettings.viewPreference === 'focus') {
+      setIntervalView('focus');
+    } else if (timerSettings.viewPreference === 'split') {
+      setIntervalView('split');
+    }
+  }, [timerSettings.viewPreference]);
 
   useEffect(() => {
     if (!authState.user) {
@@ -82,6 +166,7 @@ function IntervalTimerProject() {
         setFavoritePlanId(fallbackFavorite);
         setSelectedPlanId(fallbackFavorite);
         setPlansLoaded(true);
+        initialLoadRef.current = false;
         setDoc(ref, {
           plans: defaultPlans,
           favoritePlanId: fallbackFavorite,
@@ -106,7 +191,14 @@ function IntervalTimerProject() {
       const favorite = data.favoritePlanId || normalizedPlans[0]?.id || 'plan-1';
       setPlans(normalizedPlans);
       setFavoritePlanId(favorite);
-      setSelectedPlanId(favorite);
+      const currentSelected = selectedPlanIdRef.current;
+      const selectedExists = normalizedPlans.some((plan) => plan.id === currentSelected);
+      if (initialLoadRef.current) {
+        setSelectedPlanId(selectedExists && currentSelected ? currentSelected : favorite);
+        initialLoadRef.current = false;
+      } else if (!selectedExists) {
+        setSelectedPlanId(favorite);
+      }
       setPlansLoaded(true);
     });
     return () => unsub();
@@ -136,20 +228,21 @@ function IntervalTimerProject() {
   }, []);
 
   const playIntervalChime = useCallback(() => {
-    const ctx = unlockAudioContext();
-    if (!ctx) return;
-    const oscillator = ctx.createOscillator();
-    oscillator.type = 'sine';
-    oscillator.frequency.value = 880;
-    const gain = ctx.createGain();
-    gain.gain.value = 0.2;
-    oscillator.connect(gain);
-    gain.connect(ctx.destination);
-    const now = ctx.currentTime;
-    oscillator.start(now);
-    oscillator.stop(now + 0.5);
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate([120, 80, 120]);
+    const { soundEnabled } = timerSettingsRef.current || {};
+    if (soundEnabled) {
+      const ctx = unlockAudioContext();
+      if (ctx) {
+        const oscillator = ctx.createOscillator();
+        oscillator.type = 'sine';
+        oscillator.frequency.value = 880;
+        const gain = ctx.createGain();
+        gain.gain.value = 0.2;
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        const now = ctx.currentTime;
+        oscillator.start(now);
+        oscillator.stop(now + 0.5);
+      }
     }
   }, [unlockAudioContext]);
 
@@ -201,6 +294,46 @@ function IntervalTimerProject() {
     return () => clearInterval(id);
   }, [timerState.isRunning, timerState.segments.length, playIntervalChime]);
 
+  const scrollIntervalPlayerIntoView = useCallback((behavior = 'smooth') => {
+    if (typeof window === 'undefined') return;
+    const player = intervalPlayerRef.current;
+    if (!player) return;
+    const rootStyle = window.getComputedStyle(document.documentElement);
+    const spaceValue = rootStyle.getPropertyValue('--space-4').trim();
+    const rootFontSize = parseFloat(rootStyle.fontSize) || 16;
+    let offset = parseFloat(spaceValue) || 0;
+    if (spaceValue.includes('rem')) {
+      offset *= rootFontSize;
+    }
+    const top = player.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top: Math.max(0, top), behavior });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!timerState.segments.length) {
+      hasAutoScrolledRef.current = false;
+      return;
+    }
+    if (hasAutoScrolledRef.current) return;
+    const id = window.requestAnimationFrame(() => {
+      scrollIntervalPlayerIntoView('smooth');
+      hasAutoScrolledRef.current = true;
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [scrollIntervalPlayerIntoView, timerState.segments.length]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!timerState.segments.length) return;
+    const id = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        scrollIntervalPlayerIntoView('smooth');
+      });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [intervalView, scrollIntervalPlayerIntoView, timerState.segments.length]);
+
   const startTimer = () => {
     if (!normalizedSegments.length) return;
     const expandedSegments = normalizedSegments.flatMap((segment) =>
@@ -212,7 +345,13 @@ function IntervalTimerProject() {
       }))
     );
     if (!expandedSegments.length) return;
+    if (timerSettings.viewPreference === 'focus') {
+      setIntervalView('focus');
+    } else if (timerSettings.viewPreference === 'split') {
+      setIntervalView('split');
+    }
     unlockAudioContext();
+    setIsEditingPlan(false);
     setTimerState({
       segments: expandedSegments,
       currentIndex: 0,
@@ -344,6 +483,7 @@ function IntervalTimerProject() {
     if (favoritePlanId === selectedPlanId) {
       setFavoritePlanId(nextId);
     }
+    setDeletePlanId(null);
   };
 
   const markAsFavorite = () => {
@@ -380,70 +520,127 @@ function IntervalTimerProject() {
   const repeatTotal = current?.repeatTotal || 1;
   const repeatIndex = current?.repeatIndex || 1;
   const repeatsLeft = repeatTotal - repeatIndex + 1;
+  const isTimerActive = timerState.segments.length > 0;
+  const isFocusView = isTimerActive && intervalView === 'focus';
+  const showDeleteConfirm = deletePlanId === selectedPlanId;
+  const activePlanProgress = (() => {
+    if (!isTimerActive) return null;
+    let cursor = 0;
+    for (let i = 0; i < normalizedSegments.length; i += 1) {
+      const segmentRepeat = normalizedSegments[i]?.repeat || 1;
+      if (timerState.currentIndex < cursor + segmentRepeat) {
+        return {
+          segmentIndex: i,
+          repeatIndex: timerState.currentIndex - cursor + 1,
+          repeatTotal: segmentRepeat,
+        };
+      }
+      cursor += segmentRepeat;
+    }
+    return null;
+  })();
 
   const handleSignOut = async () => {
     await signOut(auth);
   };
 
   return (
-    <main className="workout-page">
-      <header className="workout-hero">
-        <div>
-          <h1>Interval Timer</h1>
-        </div>
-      </header>
+    <main
+      className={`workout-page${isTimerActive ? ' interval-timer--active' : ''}${isFocusView ? ' interval-timer--focus' : ''}`}
+    >
+      {!isTimerActive && (
+        <>
+          <header className="workout-hero workout-hero--settings">
+            <div className="workout-hero__content">
+              <h1>Interval Timer</h1>
+            </div>
+            <div className="workout-hero__actions workout-hero__actions--center">
+              <button
+                type="button"
+                className="workout-hero__icon-btn"
+                onClick={() => navigate('/interval-timer/settings')}
+                aria-label="Interval timer settings"
+              >
+                <img src="/icons/gear.svg" alt="" aria-hidden="true" />
+              </button>
+            </div>
+          </header>
 
-      <section className="interval-plan-header">
-        <label>
-          Choose plan
-          <div className="interval-plan-selector">
-            <select
-              value={selectedPlanId}
-              onChange={(event) => {
-                const nextValue = event.target.value;
-                if (nextValue === '__new__') {
-                  const createdId = addPlan();
-                  setSelectedPlanId(createdId);
-                  return;
-                }
-                setSelectedPlanId(nextValue);
-              }}
-            >
-              <option value="__new__">＋ New interval timer</option>
-            {plans.map((plan) => {
-              const totalSeconds = getPlanTotalSeconds(plan);
-              const totalLabel = totalSeconds ? ` • ${formatSeconds(totalSeconds)}` : '';
-              return (
-                <option key={plan.id} value={plan.id}>
-                  {favoritePlanId === plan.id ? '★ ' : ''}{plan.title || 'Untitled Plan'}{totalLabel}
-                </option>
-              );
-            })}
-          </select>
-          <span className="interval-plan-selector__badge">
-            {favoritePlanId === selectedPlanId ? 'Favorite' : 'Saved'}
-          </span>
-        </div>
-      </label>
-        <div className="interval-plan-header__actions">
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={markAsFavorite}
-            disabled={favoritePlanId === selectedPlanId}
-          >
-            {favoritePlanId === selectedPlanId ? 'Favorited' : 'Set favorite'}
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={removePlan}
-            disabled={plans.length <= 1}
-          >
-            Remove
-          </button>
-        </div>
-      </section>
+          <section className="interval-plan-header">
+            <label>
+              Choose plan
+              <div className="interval-plan-selector">
+                <select
+                  value={selectedPlanId}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    if (nextValue === '__new__') {
+                      const createdId = addPlan();
+                      setSelectedPlanId(createdId);
+                      return;
+                    }
+                    setSelectedPlanId(nextValue);
+                  }}
+                >
+                  <option value="__new__">＋ New interval timer</option>
+                  {plans.map((plan) => {
+                    const totalSeconds = getPlanTotalSeconds(plan);
+                    const totalLabel = totalSeconds ? ` • ${formatSeconds(totalSeconds)}` : '';
+                    return (
+                      <option key={plan.id} value={plan.id}>
+                        {favoritePlanId === plan.id ? '★ ' : ''}{plan.title || 'Untitled Plan'}{totalLabel}
+                      </option>
+                    );
+                  })}
+                </select>
+                <span className="interval-plan-selector__badge">
+                  {favoritePlanId === selectedPlanId ? 'Favorite' : 'Saved'}
+                </span>
+              </div>
+            </label>
+            <div className="interval-plan-header__actions">
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={markAsFavorite}
+                disabled={favoritePlanId === selectedPlanId}
+              >
+                {favoritePlanId === selectedPlanId ? 'Favorited' : 'Set favorite'}
+              </button>
+              {showDeleteConfirm ? (
+                <div className="interval-plan-confirm">
+                  <span className="interval-plan-confirm__label">
+                    Delete "{selectedPlan?.title || 'this timer'}"?
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={removePlan}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => setDeletePlanId(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => setDeletePlanId(selectedPlanId)}
+                  disabled={plans.length <= 1}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </section>
+        </>
+      )}
 
       {isEditingPlan && (
         <section className="interval-editor">
@@ -519,50 +716,30 @@ function IntervalTimerProject() {
         </section>
       )}
 
-      {!isEditingPlan && (
-        <article className="exercise-card interval-card">
-          <div className="exercise-card__head">
-          <div className="exercise-card__title">
-            <h3>{selectedPlan?.title || 'Interval Timer'}</h3>
-            <span className="interval-total">
-              <span className="interval-total__value">{formatDurationLabel(selectedPlanTotalSeconds)}</span>
-            </span>
-          </div>
-            <div className="exercise-card__meta">
-              <button type="button" className="btn btn--secondary" onClick={startTimer} disabled={!normalizedSegments.length}>
-                Start
-              </button>
+      {!isEditingPlan && timerState.segments.length > 0 && (
+        <section
+          ref={intervalPlayerRef}
+          className={`interval-player${isTimerActive ? ' interval-player--active' : ''}`}
+        >
+          <div className="interval-player__time">
+            <div className="interval-player__header">
+              <p className="interval-player__label">{current?.label || timerState.title}</p>
               <button
                 type="button"
-                className="btn btn--ghost"
-                onClick={() => setIsEditingPlan(true)}
+                className={`interval-view-toggle${isFocusView ? ' interval-view-toggle--focus' : ''}`}
+                onClick={() => setIntervalView((prev) => (prev === 'focus' ? 'split' : 'focus'))}
+                aria-label={isFocusView ? 'Show plan and timer' : 'Focus on current interval'}
               >
-                Edit plan
+                <img
+                  className="interval-view-toggle__icon"
+                  src={isFocusView ? '/icons/collapse-diagonal.svg' : '/icons/expand-diagonal.svg'}
+                  alt=""
+                  aria-hidden="true"
+                />
               </button>
             </div>
-          </div>
-          <div className="exercise-card__body">
-            <ul className="interval-list">
-            {normalizedSegments.map((segment, index) => (
-              <li key={index}>
-                <span>
-                  {segment.label || `Interval ${index + 1}`}
-                  {segment.repeat > 1 ? ` ×${segment.repeat}` : ''}
-                </span>
-                <span className="interval-list__duration">{formatSeconds(segment.durationSeconds)}</span>
-              </li>
-            ))}
-            </ul>
-          </div>
-        </article>
-      )}
-
-      {!isEditingPlan && timerState.segments.length > 0 && (
-        <section className="interval-player">
-          <div className="interval-player__time">
-            <p className="interval-player__label">{current?.label || timerState.title}</p>
             <div className="interval-player__clock">{formatSeconds(timerState.remaining)}</div>
-            {isRunning && repeatTotal > 1 && (
+            {repeatTotal > 1 && (
               <div className="interval-player__repeat">
                 <span>Rep {repeatIndex} of {repeatTotal}</span>
                 <div className="interval-player__repeat-bar">
@@ -574,7 +751,7 @@ function IntervalTimerProject() {
                 <span>{repeatsLeft} left</span>
               </div>
             )}
-            {isRunning && (
+            {isTimerActive && (
               <p className="help-text">Total time left: {formatSeconds(totalRemainingSeconds)}</p>
             )}
             {next && <p className="help-text">Next: {next.label}</p>}
@@ -582,40 +759,118 @@ function IntervalTimerProject() {
           <div className="interval-player__controls">
             <button
               type="button"
-              className="btn btn--ghost"
+              className="btn btn--secondary interval-control"
               onClick={restartSegment}
               aria-label="Restart or go back"
             >
-              ←
+              <span aria-hidden="true">←</span>
             </button>
             {isRunning ? (
-              <button type="button" className="btn btn--secondary" onClick={pauseTimer}>
-                Pause
+              <button
+                type="button"
+                className="btn btn--secondary interval-control"
+                onClick={pauseTimer}
+                aria-label="Pause"
+              >
+                <img src="/icons/pause.svg" alt="" aria-hidden="true" />
+                <span className="sr-only">Pause</span>
               </button>
             ) : (
-              <button type="button" className="btn" onClick={resumeTimer} disabled={!timerState.segments.length}>
-                Resume
+              <button
+                type="button"
+                className="btn btn--secondary interval-control"
+                onClick={resumeTimer}
+                disabled={!timerState.segments.length}
+                aria-label="Resume"
+              >
+                <img src="/icons/play.svg" alt="" aria-hidden="true" />
+                <span className="sr-only">Resume</span>
               </button>
             )}
             <button
               type="button"
-              className="btn btn--secondary"
+              className="btn btn--secondary interval-control"
               onClick={skipSegment}
               aria-label="Skip interval"
             >
-              →
+              <span aria-hidden="true">→</span>
             </button>
-            <button type="button" className="btn btn--ghost" onClick={resetTimer}>
-              Reset
+            <button
+              type="button"
+              className="btn btn--ghost interval-control"
+              onClick={resetTimer}
+              aria-label="Reset"
+            >
+              <img src="/icons/reset.svg" alt="" aria-hidden="true" />
+              <span className="sr-only">Reset</span>
             </button>
           </div>
         </section>
       )}
-      <div className="workout-edit-cta">
-        <button type="button" className="btn btn--ghost" onClick={handleSignOut}>
-          Sign out
-        </button>
-      </div>
+
+      {!isEditingPlan && (!isTimerActive || intervalView === 'split') && (
+        <article className="exercise-card interval-card">
+          <div className="exercise-card__head">
+          <div className="exercise-card__title">
+            <h3>{selectedPlan?.title || 'Interval Timer'}</h3>
+            <span className="interval-total">
+              <span className="interval-total__value">{formatDurationLabel(selectedPlanTotalSeconds)}</span>
+            </span>
+          </div>
+            <div className="interval-card__actions">
+              {!isTimerActive && (
+                <button
+                  type="button"
+                  className="btn btn--secondary interval-card__action interval-card__action--primary"
+                  onClick={startTimer}
+                  disabled={!normalizedSegments.length}
+                >
+                  Start
+                </button>
+              )}
+              {!isTimerActive && (
+                <button
+                  type="button"
+                  className="btn btn--ghost interval-card__action"
+                  onClick={() => setIsEditingPlan(true)}
+                >
+                  Edit plan
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="exercise-card__body">
+            <ul className="interval-list">
+            {normalizedSegments.map((segment, index) => {
+              const isActiveSegment = activePlanProgress?.segmentIndex === index;
+              const progressValue = isActiveSegment && activePlanProgress?.repeatTotal
+                ? Math.round((activePlanProgress.repeatIndex / activePlanProgress.repeatTotal) * 100)
+                : 0;
+              return (
+                <li
+                  key={index}
+                  className={`interval-list__item${isActiveSegment ? ' is-active' : ''}`}
+                  style={{ '--interval-progress': `${progressValue}%` }}
+                >
+                  <span className="interval-list__label">
+                    {segment.label || `Interval ${index + 1}`}
+                    {segment.repeat > 1 ? ` ×${segment.repeat}` : ''}
+                  </span>
+                  <span className="interval-list__duration">{formatSeconds(segment.durationSeconds)}</span>
+                </li>
+              );
+            })}
+            </ul>
+          </div>
+        </article>
+      )}
+      {!isTimerActive && (
+        <div className="workout-edit-cta">
+          <button type="button" className="btn btn--ghost" onClick={handleSignOut}>
+            Sign out
+          </button>
+        </div>
+      )}
     </main>
   );
 }

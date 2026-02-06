@@ -1,1 +1,32 @@
-{"scripts":{"start":"react-scripts start","build":"react-scripts build","test":"react-scripts test","eject":"react-scripts eject"},"dependencies":{"firebase":"^11.6.1","html-to-image":"^1.11.13","react":"^18.0.0","react-dom":"^18.0.0","react-router-dom":"^6.0.0","react-scripts":"^5.0.1","recharts":"^2.15.4","xlsx":"^0.18.5"},"browserslist":{"production":[">0.2%","not dead","not op_mini all"],"development":["last 1 chrome version","last 1 firefox version","last 1 safari version"]}}
+{
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "echo \"No test runner configured\" && exit 0"
+  },
+  "dependencies": {
+    "firebase": "^11.6.1",
+    "html-to-image": "^1.11.13",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-router-dom": "^6.0.0",
+    "recharts": "^2.15.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.4.1",
+    "vite": "^6.1.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

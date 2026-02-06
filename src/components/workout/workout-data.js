@@ -12,7 +12,6 @@ import {
   Legend,
 } from 'recharts';
 import { toPng } from 'html-to-image';
-import * as XLSX from 'xlsx';
 import { getWeekInfo, getWeekStartDateFromId } from '../../workout/date';
 import {
   subscribeToSettings,
@@ -27,6 +26,15 @@ import '../../styles/style.css';
 const RANGE_OPTIONS = [8, 12, 24];
 const MAX_SERIES = 4;
 const CHART_COLORS = ['#F5222D', '#1677FF', '#FAAD14', '#52C41A'];
+
+const csvEscape = (value) => {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+};
 
 const weekLabelFormatter = new Intl.DateTimeFormat('en-US', {
   month: 'short',
@@ -244,14 +252,20 @@ function WorkoutData() {
     return rows;
   };
 
-  const downloadWorkbook = (rows, filename) => {
-    const sheetData = rows.length ? rows : [{ message: 'No data available' }];
-    const worksheet = XLSX.utils.json_to_sheet(sheetData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'History');
-    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([wbout], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  const downloadCsv = (rows, filename) => {
+    const csvRows = rows.length ? rows : [{ message: 'No data available' }];
+    const headers = Array.from(
+      csvRows.reduce((set, row) => {
+        Object.keys(row).forEach((key) => set.add(key));
+        return set;
+      }, new Set())
+    );
+    const lines = [
+      headers.map((header) => csvEscape(header)).join(','),
+      ...csvRows.map((row) => headers.map((header) => csvEscape(row[header])).join(',')),
+    ];
+    const blob = new Blob([lines.join('\n')], {
+      type: 'text/csv;charset=utf-8;',
     });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -266,9 +280,9 @@ function WorkoutData() {
     if (selectedOnly && selectedExercises.length === 0) return;
     const filterSet = selectedOnly ? new Set(selectedExercises) : null;
     const rows = buildHistoryRows(sortedHistory, filterSet);
-    downloadWorkbook(
+    downloadCsv(
       rows,
-      selectedOnly ? 'workout-history-selected.xlsx' : 'workout-history-all.xlsx'
+      selectedOnly ? 'workout-history-selected.csv' : 'workout-history-all.csv'
     );
   };
 

@@ -12,7 +12,6 @@ function ToDoSignIn() {
   const [rememberMe, setRememberMe] = useState(() => getStoredRememberMe());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [showExample, setShowExample] = useState(false);
   const navigate = useNavigate();
   const auth = getAuth();
 
@@ -144,11 +143,11 @@ function ToDoSignIn() {
       <button onClick={handleExampleClick} className="todo-auth__example-btn">See Example</button>
       {showImages && (
         <div className="example-images">
-          <p style={{ marginTop: '1em' }}>
+          <p className="example-images__description">
             This page is part of a secure reminder and recurring task tracker. Once signed in, users can manage daily tasks, recurring habits, and past-due items — all tied to their private account in Firebase.
           </p>
-          <img src="./images/to-do/to-do-1.png" alt="To-Do Example 1" style={{ maxWidth: '100%', marginTop: '1em' }} />
-          <img src="./images/to-do/to-do-2.png" alt="To-Do Example 2" style={{ maxWidth: '100%', marginTop: '1em' }} />
+          <img className="example-images__image" src="./images/to-do/to-do-1.png" alt="To-Do Example 1" />
+          <img className="example-images__image" src="./images/to-do/to-do-2.png" alt="To-Do Example 2" />
         </div>
       )}
     </div>

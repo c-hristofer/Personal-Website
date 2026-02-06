@@ -1295,14 +1295,11 @@
 }
 
 .interval-player__header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-}
-
-.interval-player__header {
-  position: relative;
 }
 
 .interval-player__label {
@@ -1311,15 +1308,12 @@
   transform: translateX(-50%);
   text-align: center;
   width: min(70%, 24rem);
+  font-size: var(--fs-lg);
+  margin: 0;
 }
 
 .interval-player__header .interval-view-toggle {
   margin-left: auto;
-}
-
-.interval-player__label {
-  font-size: var(--fs-lg);
-  margin: 0;
 }
 
 .interval-view-toggle {

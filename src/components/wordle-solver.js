@@ -113,22 +113,6 @@ function WordleSolver() {
     setFeedback1(["⬛", "⬛", "⬛", "⬛", "⬛"]);
   };
 
-  const renderFeedbackControls = (fb, setFb) => (
-    <div style={{ display: 'flex', gap: '0.5em' }}>
-      {fb.map((f, i) => (
-        <button key={i} onClick={() => {
-          setFb(prev => {
-            const copy = [...prev];
-            copy[i] = copy[i] === "" ? "⬛" : copy[i] === "⬛" ? "🟨" : copy[i] === "🟨" ? "🟩" : "";
-            return copy;
-          });
-        }} style={{
-          width: "2rem", height: "2rem", fontSize: "1.2rem"
-        }}>{f || "-"}</button>
-      ))}
-    </div>
-  );
-
   const renderGuessGrid = (guesses) => {
     // guesses is array of { guess: string, feedback: array of 5 emojis }
     // Render 6 rows, each row 5 tiles
@@ -150,7 +134,7 @@ function WordleSolver() {
             {letters.map((ch, idx) => (
               <div
                 key={idx}
-                className={`guess-tile ${feedbackClass[fb[idx]] || "gray"}`}
+                className={`guess-tile guess-tile--interactive ${feedbackClass[fb[idx]] || "gray"}`}
                 onClick={() => {
                   const next = { "⬛": "🟨", "🟨": "🟩", "🟩": "⬛" };
                   setFeedback1(prev => {
@@ -159,7 +143,6 @@ function WordleSolver() {
                     return copy;
                   });
                 }}
-                style={{ cursor: 'pointer' }}
               >
                 {ch}
               </div>
@@ -203,9 +186,9 @@ function WordleSolver() {
           <p className="solver-description">
             This tool helps you solve Wordle puzzles efficiently using entropy-based heuristics. Each guess updates based on the most informative word left from the solution set.
           </p>
-          <details style={{ marginBottom: '1em' }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1em' }}>Instructions</summary>
-            <ul style={{ marginTop: '0.5em', paddingLeft: '1.5em', lineHeight: '1.6' }}>
+          <details className="solver-instructions">
+            <summary className="solver-instructions__summary">Instructions</summary>
+            <ul className="solver-instructions__list">
               <li>The solver starts with the word "salet" as the first guess.</li>
               <li>Click on each tile to cycle through the feedback colors: gray (⬛), yellow (🟨), green (🟩).</li>
               <li>Once you've set the feedback to match what Wordle gave you, click "Submit Feedback."</li>

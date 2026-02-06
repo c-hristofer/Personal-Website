@@ -1,25 +1,10 @@
 import { getAuth, signOut } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-
-const getIntervalTimerSettings = () => {
-  if (typeof window === 'undefined') {
-    return { soundEnabled: true, viewPreference: 'split' };
-  }
-  try {
-    const raw = window.localStorage.getItem('intervalTimerSettings');
-    const parsed = raw ? JSON.parse(raw) : {};
-    const viewPreference = ['split', 'focus', 'last'].includes(parsed.viewPreference)
-      ? parsed.viewPreference
-      : 'split';
-    return {
-      soundEnabled: parsed.soundEnabled !== false,
-      viewPreference,
-    };
-  } catch (error) {
-    return { soundEnabled: true, viewPreference: 'split' };
-  }
-};
+import {
+  getIntervalTimerSettings,
+  saveIntervalTimerSettings,
+} from '../utils/interval-timer-settings';
 
 function IntervalTimerSettings() {
   const navigate = useNavigate();
@@ -28,9 +13,7 @@ function IntervalTimerSettings() {
   const [settings, setSettings] = useState(getIntervalTimerSettings);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('intervalTimerSettings', JSON.stringify(settings));
-    window.dispatchEvent(new Event('intervalTimerSettingsUpdated'));
+    saveIntervalTimerSettings(settings);
   }, [settings]);
 
   return (

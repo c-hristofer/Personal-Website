@@ -1484,6 +1484,25 @@ p ol li {
   transform: translateY(-1px);
 }
 
+.example-images {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.example-images__description {
+  margin: 0;
+  line-height: var(--lh-normal);
+}
+
+.example-images__image {
+  max-width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+}
+
 @media (max-width: 640px) {
   .todo-auth__intro,
   .todo-auth__panel {
@@ -1681,6 +1700,10 @@ p ol li {
   color: var(--color-primary-contrast);
 }
 
+.guess-tile--interactive {
+  cursor: pointer;
+}
+
 .guess-tile.gray { background-color: var(--color-wordle-absent);}
 .guess-tile.yellow { background-color: var(--color-wordle-present); }
 .guess-tile.green { background-color: var(--color-wordle-correct); }
@@ -1697,6 +1720,23 @@ p ol li {
     gap: 1rem;
     justify-content: center;
     margin-top: 1rem;
+}
+
+.solver-instructions {
+  margin-bottom: 1em;
+}
+
+.solver-instructions__summary {
+  cursor: pointer;
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-md);
+}
+
+.solver-instructions__list {
+  margin-top: 0.5em;
+  padding-left: 1.5em;
+  line-height: 1.6;
+  text-align: left;
 }
 
 

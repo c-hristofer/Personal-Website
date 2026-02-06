@@ -5,6 +5,12 @@ import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { applyPersistencePreference } from '../utils/auth-persistence';
 import { db } from '../firebase';
 import { getStoredRememberMe, persistRememberMe } from '../utils/remember-me';
+import {
+  getInitialIntervalView,
+  getIntervalTimerSettings,
+  INTERVAL_TIMER_SETTINGS_EVENT,
+  setStoredIntervalView,
+} from '../utils/interval-timer-settings';
 
 const parseNumber = (value) => {
   const parsed = Number(value);
@@ -27,42 +33,6 @@ const formatDurationLabel = (value) => {
     return `${hours}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
   }
   return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
-};
-
-const getIntervalTimerSettings = () => {
-  if (typeof window === 'undefined') {
-    return { soundEnabled: true, viewPreference: 'split' };
-  }
-  try {
-    const raw = window.localStorage.getItem('intervalTimerSettings');
-    const parsed = raw ? JSON.parse(raw) : {};
-    const viewPreference = ['split', 'focus', 'last'].includes(parsed.viewPreference)
-      ? parsed.viewPreference
-      : 'split';
-    return {
-      soundEnabled: parsed.soundEnabled !== false,
-      viewPreference,
-    };
-  } catch (error) {
-    return { soundEnabled: true, viewPreference: 'split' };
-  }
-};
-
-const getStoredIntervalView = () => {
-  if (typeof window === 'undefined') return 'split';
-  try {
-    const value = window.localStorage.getItem('intervalTimerLastView');
-    return value === 'focus' ? 'focus' : 'split';
-  } catch (error) {
-    return 'split';
-  }
-};
-
-const getInitialIntervalView = () => {
-  const settings = getIntervalTimerSettings();
-  if (settings.viewPreference === 'focus') return 'focus';
-  if (settings.viewPreference === 'split') return 'split';
-  return getStoredIntervalView();
 };
 
 const getPlanTotalSeconds = (plan) => {
@@ -130,16 +100,16 @@ function IntervalTimerProject() {
       setTimerSettings(getIntervalTimerSettings());
     };
     window.addEventListener('storage', handleSettingsChange);
-    window.addEventListener('intervalTimerSettingsUpdated', handleSettingsChange);
+    window.addEventListener(INTERVAL_TIMER_SETTINGS_EVENT, handleSettingsChange);
     return () => {
       window.removeEventListener('storage', handleSettingsChange);
-      window.removeEventListener('intervalTimerSettingsUpdated', handleSettingsChange);
+      window.removeEventListener(INTERVAL_TIMER_SETTINGS_EVENT, handleSettingsChange);
     };
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem('intervalTimerLastView', intervalView);
+    setStoredIntervalView(intervalView);
   }, [intervalView]);
 
   useEffect(() => {

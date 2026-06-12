@@ -3,3 +3,112 @@
 @import './layout.css';
 @import './components.css';
 @import './workout.css';
+
+:is(
+  button,
+  .btn,
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select,
+  main,
+  section,
+  article,
+  .card,
+  .panel,
+  .main-card,
+  .dashboard,
+  .signin-page,
+  .todo-auth__intro,
+  .todo-auth__panel,
+  .remember-toggle,
+  .workout-hero,
+  .workout-panel,
+  .exercise-card,
+  .exercise-editor,
+  .interval-player,
+  .mobile-workout-bar,
+  .exercise-dropdown,
+  .exercise-chip,
+  .exercise-chip__remove,
+  .icon-button,
+  .radio-tile,
+  .status-banner,
+  .form-error,
+  .deload-banner,
+  .deload-pill,
+  .interval-total,
+  .set-row,
+  .set-row__done,
+  .set-row__base-indicator,
+  .set-row__base-toggle,
+  .exercise-editor__superset,
+  .exercise-editor__superset-track,
+  .exercise-editor__superset-thumb,
+  .workout-feature-toggle,
+  .exercise-library-item,
+  .range-toggle,
+  .day-selector button,
+  .theme-toggle,
+  .theme-toggle__button,
+  .nav-menu,
+  .nav-menu a,
+  .toc,
+  .toc-popup,
+  .scrollable-container
+) {
+  border-radius: var(--radius-app);
+}
+
+.workout-page .exercise-card__toggle {
+  width: 1.65rem;
+  min-width: 1.65rem;
+  max-width: 1.65rem;
+  height: 1.65rem;
+  min-height: 1.65rem;
+  max-height: 1.65rem;
+  aspect-ratio: 1;
+  flex: 0 0 1.65rem;
+  padding: 0;
+  border-radius: 50%;
+  line-height: 1;
+}
+
+.workout-page .exercise-card__toggle span {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  line-height: 1;
+  transform: translateY(-0.02em);
+}
+
+.workout-page .mobile-day-stepper button {
+  appearance: none;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text);
+  transform: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.workout-page .mobile-day-stepper button:hover:not(:disabled),
+.workout-page .mobile-day-stepper button:focus-visible {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.workout-page .mobile-day-stepper button:nth-child(2) {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: clamp(0.56rem, 2.8vw, 0.9rem);
+  line-height: 1;
+}

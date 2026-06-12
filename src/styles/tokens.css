@@ -30,9 +30,10 @@
   --space-9: 4rem;
   --space-10: clamp(4rem, 6vw, 6rem);
 
-  --radius-sm: 0.35rem;
-  --radius-md: 0.65rem;
-  --radius-lg: 1.5rem;
+  --radius-sm: 1.25rem;
+  --radius-md: 1.25rem;
+  --radius-lg: 1.25rem;
+  --radius-app: 1.25rem;
 
   --color-bg: hsl(214, 40%, 98%);
   --color-surface: hsl(0, 0%, 100%);

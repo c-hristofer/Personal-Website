@@ -91,6 +91,17 @@ function WorkoutSettings() {
     }
   };
 
+  const handleWorkoutFeatureChange = async (updates) => {
+    if (!user) return;
+    try {
+      await updateSettings(user.uid, updates);
+      setStatus('Workout preference saved.');
+      setError('');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const handleDeloadChange = (field, value) => {
     setDeloadDraft((prev) => {
       if (!prev) return prev;
@@ -302,6 +313,47 @@ function WorkoutSettings() {
               <span>{value === 'today' ? 'Always today' : 'Last opened day'}</span>
             </label>
           ))}
+        </div>
+      </section>
+
+      <section className="workout-panel">
+        <h2>Workout flow</h2>
+        <p className="help-text">Control timers and lifting guidance shown during workouts.</p>
+        <div className="workout-feature-grid">
+          <label className="workout-feature-toggle" data-active={Boolean(settings?.restTimerEnabled)}>
+            <input
+              type="checkbox"
+              checked={Boolean(settings?.restTimerEnabled)}
+              onChange={(event) => handleWorkoutFeatureChange({ restTimerEnabled: event.target.checked })}
+            />
+            <span>
+              <strong>Rest timer</strong>
+              <small>Start a countdown after completing a set.</small>
+            </span>
+          </label>
+          <label className="workout-feature-toggle" data-active={Boolean(settings?.historyInsightsEnabled)}>
+            <input
+              type="checkbox"
+              checked={Boolean(settings?.historyInsightsEnabled)}
+              onChange={(event) => handleWorkoutFeatureChange({ historyInsightsEnabled: event.target.checked })}
+            />
+            <span>
+              <strong>History insights</strong>
+              <small>Show best recorded weight on exercise cards.</small>
+            </span>
+          </label>
+          <label>
+            Rest duration (seconds)
+            <input
+              type="number"
+              min="15"
+              max="600"
+              step="15"
+              value={settings?.restTimerSeconds || 90}
+              onChange={(event) => handleWorkoutFeatureChange({ restTimerSeconds: Number(event.target.value) || 90 })}
+              disabled={!settings?.restTimerEnabled}
+            />
+          </label>
         </div>
       </section>
 

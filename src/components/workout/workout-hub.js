@@ -18,19 +18,27 @@ import {
 import { getWeekInfo, getWeekLabel, getPreviousWeekId } from '../../workout/date';
 import {
   computeWeekExerciseSummaries,
+  ensureExerciseLibraryMigration,
+  getWorkoutCompletions,
+  normalizeExerciseName,
+  renameExerciseLibraryItem,
   savePlan,
   saveWeightsForDay,
   subscribeToCompletions,
+  subscribeToExerciseLibrary,
   subscribeToPlan,
   subscribeToSettings,
   subscribeToWeights,
+  subscribeToWorkoutHistory,
   updateCompletion,
   updateSettings,
+  upsertExerciseLibraryItem,
   upsertWorkoutHistory,
 } from '../../workout/service';
 import {
   applyDeloadToValue,
   computeDeloadState,
+  convertUnitValue,
   formatWeightValue,
   isNumericWeight,
   parseNumericWeight,
@@ -281,6 +289,8 @@ function WorkoutHub() {
   });
   const [weights, setWeights] = useState({});
   const [settings, setSettings] = useState(null);
+  const [exerciseLibrary, setExerciseLibrary] = useState([]);
+  const [workoutHistory, setWorkoutHistory] = useState([]);
   const [completions, setCompletions] = useState({ dayData: {} });
   const [weekInfo, setWeekInfo] = useState(() => getWeekInfo());
   const [selectedDay, setSelectedDay] = useState(() => getWeekInfo().dayKey);
@@ -300,6 +310,13 @@ function WorkoutHub() {
     remaining: 0,
     isRunning: false,
     title: '',
+  });
+  const [restTimer, setRestTimer] = useState({
+    exerciseId: null,
+    label: '',
+    remaining: 0,
+    duration: 0,
+    isRunning: false,
   });
   const audioContextRef = useRef(null);
   const archiveStateRef = useRef({ weekId: null, running: false });
@@ -366,7 +383,25 @@ function WorkoutHub() {
   }, [timerState.isRunning, timerState.segments.length, playIntervalChime]);
 
   useEffect(() => {
+    if (!restTimer.isRunning || restTimer.remaining <= 0) {
+      return undefined;
+    }
+    const id = setInterval(() => {
+      setRestTimer((prev) => {
+        if (!prev.isRunning) return prev;
+        if (prev.remaining > 1) {
+          return { ...prev, remaining: prev.remaining - 1 };
+        }
+        playIntervalChime();
+        return { ...prev, remaining: 0, isRunning: false };
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [restTimer.isRunning, restTimer.remaining, playIntervalChime]);
+
+  useEffect(() => {
     setTimerState((prev) => ({ ...prev, isRunning: false }));
+    setRestTimer((prev) => ({ ...prev, isRunning: false }));
   }, [selectedDay]);
 
   useEffect(() => {
@@ -395,10 +430,16 @@ function WorkoutHub() {
       });
       setWeights({});
       setSettings(null);
+      setExerciseLibrary([]);
+      setWorkoutHistory([]);
       setCompletions({ dayData: {} });
       setIsEditing(false);
       return;
     }
+    const previousWeekId = getPreviousWeekId(getWeekInfo().weekId);
+    ensureExerciseLibraryMigration(user.uid, previousWeekId).catch((error) => {
+      console.error('Workout exercise library migration failed', error);
+    });
     const unsubPlan = subscribeToPlan(user.uid, (data) => {
       setPlan(data);
       if (!isEditing) {
@@ -411,10 +452,18 @@ function WorkoutHub() {
     const unsubSettings = subscribeToSettings(user.uid, (data) => {
       setSettings(data);
     });
+    const unsubExerciseLibrary = subscribeToExerciseLibrary(user.uid, (data) => {
+      setExerciseLibrary(data);
+    });
+    const unsubHistory = subscribeToWorkoutHistory(user.uid, 52, (data) => {
+      setWorkoutHistory(data);
+    });
     return () => {
       unsubPlan();
       unsubWeights();
       unsubSettings();
+      unsubExerciseLibrary();
+      unsubHistory();
     };
   }, [authState.user, isEditing]);
 
@@ -449,6 +498,14 @@ function WorkoutHub() {
     }
   }, [settings?.defaultDayView, weekInfo.dayKey]);
 
+  const exerciseLibraryMap = useMemo(
+    () => exerciseLibrary.reduce((acc, exercise) => {
+      acc[exercise.id] = exercise;
+      return acc;
+    }, {}),
+    [exerciseLibrary],
+  );
+
   useEffect(() => {
     if (!authState.user || !plan?.days || !weekInfo.weekId || !settings) {
       return;
@@ -462,7 +519,14 @@ function WorkoutHub() {
     archiveStateRef.current = { weekId: previousWeekId, running: true };
     const runArchive = async () => {
       try {
-        const exerciseSummaries = computeWeekExerciseSummaries(plan.days, weights);
+        const previousCompletions = await getWorkoutCompletions(authState.user.uid, previousWeekId);
+        const exerciseSummaries = computeWeekExerciseSummaries(
+          plan.days,
+          weights,
+          exerciseLibraryMap,
+          previousCompletions.dayData,
+          { completedOnly: true },
+        );
         await upsertWorkoutHistory(authState.user.uid, previousWeekId, {
           unitSystem: settings.unitSystem || 'lbs',
           exerciseSummaries,
@@ -478,13 +542,20 @@ function WorkoutHub() {
       }
     };
     runArchive();
-  }, [authState.user, plan?.days, settings, weekInfo.weekId, weights]);
+  }, [authState.user, plan?.days, settings, weekInfo.weekId, weights, exerciseLibraryMap]);
 
   const handleSelectDay = (dayKey) => {
     setSelectedDay(dayKey);
     if (authState.user) {
       updateSettings(authState.user.uid, { lastSelectedDay: dayKey }).catch(() => {});
     }
+  };
+
+  const handleSelectRelativeDay = (offset) => {
+    const currentIndex = DAY_KEYS.indexOf(selectedDay);
+    const safeIndex = currentIndex >= 0 ? currentIndex : DAY_KEYS.indexOf(weekInfo.dayKey);
+    const nextIndex = (safeIndex + offset + DAY_KEYS.length) % DAY_KEYS.length;
+    handleSelectDay(DAY_KEYS[nextIndex]);
   };
 
   const handleStartEditing = () => {
@@ -517,6 +588,45 @@ function WorkoutHub() {
     });
   };
 
+  const handleExerciseSelect = async (dayKey, exerciseIndex, libraryExercise) => {
+    if (!libraryExercise) return;
+    let selected = libraryExercise;
+    if (!selected.id && authState.user) {
+      selected = await upsertExerciseLibraryItem(authState.user.uid, selected.name);
+    }
+    if (!selected?.id) return;
+    setEditDraft((prev) => {
+      if (!prev) return prev;
+      const nextDays = clonePlan(prev.days);
+      const dayExercises = Array.isArray(nextDays[dayKey]) ? [...nextDays[dayKey]] : [];
+      dayExercises[exerciseIndex] = {
+        ...dayExercises[exerciseIndex],
+        exerciseId: selected.id,
+        name: selected.name,
+      };
+      nextDays[dayKey] = dayExercises;
+      return { ...prev, days: nextDays };
+    });
+  };
+
+  const handleExerciseRename = async (dayKey, exerciseIndex, libraryExercise, nextName) => {
+    if (!authState.user || !libraryExercise?.id) return;
+    const updated = await renameExerciseLibraryItem(authState.user.uid, libraryExercise.id, nextName);
+    if (!updated?.id) return;
+    setEditDraft((prev) => {
+      if (!prev) return prev;
+      const nextDays = clonePlan(prev.days);
+      const dayExercises = Array.isArray(nextDays[dayKey]) ? [...nextDays[dayKey]] : [];
+      dayExercises[exerciseIndex] = {
+        ...dayExercises[exerciseIndex],
+        exerciseId: updated.id,
+        name: updated.name,
+      };
+      nextDays[dayKey] = dayExercises;
+      return { ...prev, days: nextDays };
+    });
+  };
+
   const handleAddExercise = (dayKey) => {
     setEditDraft((prev) => {
       if (!prev) return prev;
@@ -537,6 +647,35 @@ function WorkoutHub() {
       nextOrder[dayKey] = dayOrder;
       return { ...prev, days: nextDays, dayOrder: nextOrder };
     });
+  };
+
+  const appendExercisesToDay = (dayKey, exercisesToAdd) => {
+    setEditDraft((prev) => {
+      if (!prev || !exercisesToAdd.length) return prev;
+      const nextDays = clonePlan(prev.days);
+      const dayExercises = Array.isArray(nextDays[dayKey]) ? [...nextDays[dayKey]] : [];
+      dayExercises.push(...exercisesToAdd);
+      nextDays[dayKey] = dayExercises;
+      const nextOrder = normalizeDayOrder(prev.dayOrder, nextDays, prev.intervalPlans, prev.cardioPlans, { includeEmpty: true });
+      const dayOrder = Array.isArray(nextOrder[dayKey]) ? [...nextOrder[dayKey]] : [];
+      exercisesToAdd.forEach((exercise) => {
+        if (!dayOrder.some((item) => item.type === 'exercise' && item.id === exercise.id)) {
+          dayOrder.push({ type: 'exercise', id: exercise.id });
+        }
+      });
+      nextOrder[dayKey] = dayOrder;
+      return { ...prev, days: nextDays, dayOrder: nextOrder };
+    });
+  };
+
+  const handleCopyDay = (sourceDayKey, targetDayKey) => {
+    if (!sourceDayKey || sourceDayKey === targetDayKey) return;
+    const source = editDraft?.days?.[sourceDayKey] || [];
+    appendExercisesToDay(targetDayKey, source.map((exercise) => ({
+      ...exercise,
+      id: defaultExercise().id,
+      exerciseId: exercise.exerciseId || '',
+    })));
   };
 
   const handleAddIntervalItem = (dayKey) => {
@@ -858,9 +997,11 @@ function WorkoutHub() {
       DAY_KEYS.forEach((dayKey) => {
         sanitizedDays[dayKey] = (editDraft.days?.[dayKey] || []).map((exercise) => ({
           id: exercise.id || defaultExercise().id,
+          exerciseId: exercise.exerciseId || '',
           name: exercise.name.trim(),
           sets: Number(exercise.sets),
           reps: (exercise.reps ?? '').toString().trim(),
+          superset: Boolean(exercise.superset),
         }));
         const rawName = (editDraft.dayNames?.[dayKey] || '').trim();
         sanitizedDayNames[dayKey] = rawName || DAY_LABELS[dayKey];
@@ -899,6 +1040,28 @@ function WorkoutHub() {
           notes: (plan.notes || '').trim(),
         }));
       });
+      const exerciseCache = new Map(exerciseLibrary.map((exercise) => [
+        exercise.normalizedName || normalizeExerciseName(exercise.name),
+        exercise,
+      ]));
+      for (const dayKey of DAY_KEYS) {
+        for (const exercise of sanitizedDays[dayKey]) {
+          if (exercise.exerciseId) continue;
+          const cacheKey = normalizeExerciseName(exercise.name);
+          const cached = exerciseCache.get(cacheKey);
+          if (cached?.id) {
+            exercise.exerciseId = cached.id;
+            exercise.name = cached.name;
+            continue;
+          }
+          const created = await upsertExerciseLibraryItem(authState.user.uid, exercise.name);
+          if (created?.id) {
+            exercise.exerciseId = created.id;
+            exercise.name = created.name;
+            exerciseCache.set(created.normalizedName || cacheKey, created);
+          }
+        }
+      }
       await savePlan(authState.user.uid, {
         days: sanitizedDays,
         dayNames: sanitizedDayNames,
@@ -970,10 +1133,18 @@ function WorkoutHub() {
       const exerciseData = exercisesMap[exerciseId]
         ? { ...exercisesMap[exerciseId] }
         : { setWeights: [] };
+      if (
+        options.libraryExerciseId
+        && exerciseData.exerciseId
+        && exerciseData.exerciseId !== options.libraryExerciseId
+      ) {
+        exerciseData.setWeights = [];
+      }
       const setWeightsArray = Array.isArray(exerciseData.setWeights)
         ? [...exerciseData.setWeights]
         : [];
       setWeightsArray[setIndex] = storedValue;
+      exerciseData.exerciseId = options.libraryExerciseId || exerciseData.exerciseId || '';
       exerciseData.setWeights = setWeightsArray;
       exerciseData.updatedAt = new Date().toISOString();
       exercisesMap[exerciseId] = exerciseData;
@@ -995,6 +1166,57 @@ function WorkoutHub() {
       });
     } catch (error) {
       console.error('Failed to update completion', error);
+    }
+  };
+
+  const startRestTimerForExercise = (exercise) => {
+    if (!settings?.restTimerEnabled) return;
+    const duration = Math.min(600, Math.max(15, Number(settings.restTimerSeconds) || 90));
+    setRestTimer({
+      exerciseId: exercise.id,
+      label: exercise.name,
+      remaining: duration,
+      duration,
+      isRunning: true,
+    });
+  };
+
+  const pauseRestTimer = () => {
+    setRestTimer((prev) => ({ ...prev, isRunning: false }));
+  };
+
+  const resumeRestTimer = () => {
+    setRestTimer((prev) => prev.remaining > 0 ? { ...prev, isRunning: true } : prev);
+  };
+
+  const resetRestTimer = () => {
+    setRestTimer({
+      exerciseId: null,
+      label: '',
+      remaining: 0,
+      duration: 0,
+      isRunning: false,
+    });
+  };
+
+  const handleToggleSetComplete = async (exercise, setIndex, nextValue) => {
+    if (!authState.user) return;
+    const totalSets = Number(exercise.sets) || 0;
+    const currentSets = Array.from({ length: totalSets }, (_, index) =>
+      Boolean(dayCompletion[exercise.id]?.completedSets?.[index])
+    );
+    currentSets[setIndex] = nextValue;
+    const completed = totalSets > 0 && currentSets.every(Boolean);
+    try {
+      await updateCompletion(authState.user.uid, weekInfo.weekId, selectedDay, exercise.id, {
+        completed,
+        completedSets: currentSets,
+      });
+      if (nextValue) {
+        startRestTimerForExercise(exercise);
+      }
+    } catch (error) {
+      console.error('Failed to update set completion', error);
     }
   };
 
@@ -1103,6 +1325,27 @@ function WorkoutHub() {
     legacyCardioCompletion,
   ]);
 
+  const exerciseInsights = useMemo(() => {
+    if (!settings?.historyInsightsEnabled) return {};
+    const targetUnit = settings?.unitSystem || 'lbs';
+    const insights = {};
+    workoutHistory.forEach((doc) => {
+      Object.entries(doc.exerciseSummaries || {}).forEach(([summaryId, summary]) => {
+        if (summary?.value === undefined || summary.value === null) return;
+        const exerciseId = summary.exerciseId || summaryId;
+        const converted = convertUnitValue(Number(summary.value), doc.unitSystem || 'lbs', targetUnit);
+        if (!Number.isFinite(converted)) return;
+        if (!insights[exerciseId] || converted > insights[exerciseId].best) {
+          insights[exerciseId] = {
+            best: converted,
+            unit: targetUnit,
+          };
+        }
+      });
+    });
+    return insights;
+  }, [settings?.historyInsightsEnabled, settings?.unitSystem, workoutHistory]);
+
   if (authState.loading) {
     return (
       <main className="workout-page">
@@ -1124,12 +1367,13 @@ function WorkoutHub() {
   const dayNickname = plan.dayNames?.[selectedDay]?.trim();
   const headerTitle = dayNickname || 'Workout';
   const dayLabel = DAY_LABELS[selectedDay] || 'Today';
+  const isTodaySelected = selectedDay === weekInfo.dayKey;
 
   return (
     <main className={pageClassName}>
       <header className="workout-hero workout-hero--settings">
         <div className="workout-hero__content">
-            <h1>{headerTitle}</h1>
+          <h1>{headerTitle}</h1>
           <p className="help-text">
             {dayLabel} • Week of {getWeekLabel(weekInfo)} • Progress {progress.pct}%
           </p>
@@ -1188,7 +1432,11 @@ function WorkoutHub() {
           intervalPlans={editDraft.intervalPlans?.[selectedDay] || []}
           cardioPlans={editDraft.cardioPlans?.[selectedDay] || []}
           dayOrder={editDraft.dayOrder}
+          exerciseLibrary={exerciseLibrary}
           onChange={handlePlanChange}
+          onExerciseSelect={handleExerciseSelect}
+          onExerciseRename={handleExerciseRename}
+          onCopyDay={handleCopyDay}
           onAdd={handleAddExercise}
           onAddInterval={handleAddIntervalItem}
           onAddCardio={handleAddCardioItem}
@@ -1220,13 +1468,23 @@ function WorkoutHub() {
                 <ExerciseCard
                   key={exercise.id}
                   exercise={exercise}
-                  weights={dayWeights[exercise.id]?.setWeights || []}
+                  weights={(
+                    !dayWeights[exercise.id]?.exerciseId
+                    || !exercise.exerciseId
+                    || dayWeights[exercise.id]?.exerciseId === exercise.exerciseId
+                  ) ? (dayWeights[exercise.id]?.setWeights || []) : []}
                   unit={settings?.unitSystem || 'lbs'}
                   completion={dayCompletion[exercise.id]}
                   onWeightChange={handleWeightChange}
                   onToggleExerciseComplete={handleToggleExerciseComplete}
+                  onToggleSetComplete={handleToggleSetComplete}
                   status={weightStatuses[exercise.id]}
                   deloadState={deloadState}
+                  restTimer={restTimer.exerciseId === exercise.id ? restTimer : null}
+                  onPauseRestTimer={pauseRestTimer}
+                  onResumeRestTimer={resumeRestTimer}
+                  onResetRestTimer={resetRestTimer}
+                  insight={exercise.exerciseId ? exerciseInsights[exercise.exerciseId] : null}
                 />
               );
             }
@@ -1281,6 +1539,15 @@ function WorkoutHub() {
           )}
         </>
       )}
+      <MobileWorkoutBar
+        dayLabel={isTodaySelected ? 'Today' : dayLabel}
+        selectorOnly={isEditing}
+        onToday={() => handleSelectDay(weekInfo.dayKey)}
+        onPreviousDay={() => handleSelectRelativeDay(-1)}
+        onNextDay={() => handleSelectRelativeDay(1)}
+        onEdit={handleStartEditing}
+        onData={() => navigate('/workout/data')}
+      />
     </main>
   );
 }
@@ -1436,6 +1703,26 @@ function DeloadBanner({ percent }) {
   );
 }
 
+function MobileWorkoutBar({ dayLabel, selectorOnly = false, onToday, onPreviousDay, onNextDay, onEdit, onData }) {
+  return (
+    <nav className={`mobile-workout-bar${selectorOnly ? ' mobile-workout-bar--selector-only' : ''}`} aria-label="Workout actions">
+      <div className={`mobile-workout-bar__actions${selectorOnly ? ' mobile-workout-bar__actions--selector-only' : ''}`}>
+        <div className="mobile-day-stepper" role="group" aria-label="Change workout day">
+          <button type="button" onClick={onPreviousDay} aria-label="Previous day">‹</button>
+          <button type="button" onClick={onToday} aria-label="Go to today">{dayLabel}</button>
+          <button type="button" onClick={onNextDay} aria-label="Next day">›</button>
+        </div>
+        {!selectorOnly && (
+          <>
+            <button type="button" onClick={onEdit}>Edit</button>
+            <button type="button" onClick={onData}>Data</button>
+          </>
+        )}
+      </div>
+    </nav>
+  );
+}
+
 function ExerciseCard({
   exercise,
   weights,
@@ -1443,8 +1730,14 @@ function ExerciseCard({
   completion,
   onWeightChange,
   onToggleExerciseComplete,
+  onToggleSetComplete,
   status,
   deloadState,
+  restTimer,
+  onPauseRestTimer,
+  onResumeRestTimer,
+  onResetRestTimer,
+  insight,
 }) {
   const [expanded, setExpanded] = useState(true);
   const [showingBase, setShowingBase] = useState(false);
@@ -1452,7 +1745,10 @@ function ExerciseCard({
   const sets = Number(exercise.sets) || 0;
   const repsLabel = exercise.reps ? exercise.reps.toString() : 'reps';
   const setWeights = Array.from({ length: sets }, (_, idx) => weights?.[idx] ?? '');
-  const isCompleted = completion?.completed || false;
+  const completedSets = Array.from({ length: sets }, (_, idx) =>
+    Boolean(completion?.completedSets?.[idx] || (completion?.completed && !Array.isArray(completion?.completedSets)))
+  );
+  const isCompleted = completion?.completed || (sets > 0 && completedSets.every(Boolean));
   const deloadActive = Boolean(deloadState?.deloadEnabled && deloadState.isDeloadWeek);
   const deloadPercent = deloadState?.deloadPercent ?? 15;
 
@@ -1479,7 +1775,9 @@ function ExerciseCard({
     if (
       target.closest('.exercise-card__toggle')
       || target.closest('.set-row__input')
+      || target.closest('.set-row__done')
       || target.closest('.set-row__base-toggle')
+      || target.closest('.rest-timer')
     ) {
       return;
     }
@@ -1520,14 +1818,22 @@ function ExerciseCard({
                 aria-expanded={expanded}
                 aria-label={expanded ? 'Hide details' : 'Show details'}
               >
-                <span aria-hidden="true">{expanded ? ' − ' : ' + '}</span>
+                <span aria-hidden="true">{expanded ? '−' : '+'}</span>
               </button>
             </div>
           </div>
           <div className="exercise-card__meta-line">
             <span className="exercise-card__sets">{sets} sets × {repsLabel}</span>
+            {exercise.superset && (
+              <span className="set-row__base-indicator">Superset</span>
+            )}
             {deloadActive && showingBase && (
               <span className="set-row__base-indicator">Base</span>
+            )}
+            {insight?.best !== undefined && (
+              <span className="set-row__base-indicator">
+                Best: {formatWeightValue(insight.best)} {insight.unit}
+              </span>
             )}
             {deloadActive && (
               <button
@@ -1556,7 +1862,16 @@ function ExerciseCard({
                 ? deloadedValue
                 : baseRaw;
               return (
-                <div key={idx} className="set-row">
+                <div key={idx} className={`set-row${completedSets[idx] ? ' is-done' : ''}`}>
+                  <button
+                    type="button"
+                    className="set-row__done"
+                    onClick={() => onToggleSetComplete(exercise, idx, !completedSets[idx])}
+                    aria-pressed={completedSets[idx]}
+                    aria-label={`Mark set ${idx + 1} ${completedSets[idx] ? 'incomplete' : 'complete'}`}
+                  >
+                    <span aria-hidden="true">{completedSets[idx] ? '✓' : ''}</span>
+                  </button>
                   <span className="set-row__label">Set {idx + 1}</span>
                   <input
                     className="set-row__input"
@@ -1566,7 +1881,9 @@ function ExerciseCard({
                     onFocus={() => setEditingIndex(idx)}
                     onBlur={() => setEditingIndex((current) => (current === idx ? null : current))}
                     onChange={(event) =>
-                      onWeightChange(exercise.id, idx, event.target.value)
+                      onWeightChange(exercise.id, idx, event.target.value, {
+                        libraryExerciseId: exercise.exerciseId,
+                      })
                     }
                   />
                   <span className="set-row__unit">{unit}</span>
@@ -1582,9 +1899,133 @@ function ExerciseCard({
             })}
           </div>
           <ExerciseStatus status={status} />
+          {restTimer && (
+            <div className="rest-timer">
+              <div>
+                <span className="tag">Rest</span>
+                <strong>{formatSeconds(restTimer.remaining)}</strong>
+              </div>
+              <div className="rest-timer__actions">
+                {restTimer.isRunning ? (
+                  <button type="button" className="btn btn--ghost" onClick={onPauseRestTimer}>Pause</button>
+                ) : (
+                  <button type="button" className="btn btn--secondary" onClick={onResumeRestTimer} disabled={restTimer.remaining <= 0}>
+                    Resume
+                  </button>
+                )}
+                <button type="button" className="btn btn--ghost" onClick={onResetRestTimer}>Clear</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </article>
+  );
+}
+
+function ExerciseNameInput({ value, exerciseLibrary, onChange, onSelect, onRename }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef(null);
+  const query = normalizeExerciseName(value);
+  const options = useMemo(() => {
+    const source = Array.isArray(exerciseLibrary) ? exerciseLibrary : [];
+    if (!query) return source.slice(0, 12);
+    return source
+      .filter((exercise) => normalizeExerciseName(exercise.name).includes(query))
+      .slice(0, 12);
+  }, [exerciseLibrary, query]);
+  const exactExercise = useMemo(
+    () => (exerciseLibrary || []).find((exercise) => normalizeExerciseName(exercise.name) === query),
+    [exerciseLibrary, query],
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (exercise) => {
+    onSelect(exercise);
+    setIsOpen(false);
+  };
+
+  const handleAdd = () => {
+    const name = (value || '').trim();
+    if (!name) return;
+    handleSelect({ name });
+  };
+
+  const handleRename = () => {
+    if (!exactExercise) return;
+    const nextName = window.prompt('Edit exercise name', exactExercise.name);
+    if (!nextName || !nextName.trim()) return;
+    onRename(exactExercise, nextName.trim());
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="exercise-name-field" ref={wrapperRef}>
+      <input
+        type="text"
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        autoComplete="off"
+      />
+      {isOpen && (
+        <div className="exercise-name-menu">
+          {options.map((exercise) => (
+            <button
+              key={exercise.id}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => handleSelect(exercise)}
+            >
+              {exercise.name}
+            </button>
+          ))}
+          {query && !exactExercise && (
+            <button
+              type="button"
+              className="exercise-name-menu__create"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={handleAdd}
+            >
+              Add "{value.trim()}"
+            </button>
+          )}
+          <div className="exercise-name-menu__actions">
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={handleAdd}
+              disabled={!value.trim()}
+            >
+              Add an exercise
+            </button>
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={handleRename}
+              disabled={!exactExercise}
+            >
+              Edit exercise name
+            </button>
+          </div>
+          {!options.length && (!query || exactExercise) && (
+            <span className="exercise-name-menu__empty">No exercises found</span>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1595,7 +2036,11 @@ function EditPanel({
   intervalPlans,
   cardioPlans,
   dayOrder,
+  exerciseLibrary,
   onChange,
+  onExerciseSelect,
+  onExerciseRename,
+  onCopyDay,
   onAdd,
   onAddInterval,
   onAddCardio,
@@ -1614,6 +2059,8 @@ function EditPanel({
   saving,
   error,
 }) {
+  const [copySourceDay, setCopySourceDay] = useState('');
+  const [pendingDuplicate, setPendingDuplicate] = useState(false);
   const exercises = days?.[dayKey] || [];
   const exerciseIndexById = new Map(
     exercises.filter((exercise) => exercise?.id).map((exercise, index) => [exercise.id, index]),
@@ -1629,6 +2076,7 @@ function EditPanel({
 
   useEffect(() => {
     setPendingDelete(null);
+    setPendingDuplicate(false);
   }, [dayKey]);
 
   const isPendingDelete = (type, id) => pendingDelete?.type === type && pendingDelete?.id === id;
@@ -1666,19 +2114,30 @@ function EditPanel({
               <div className="exercise-editor__grid">
                 <label>
                   Name
-                  <input
-                    type="text"
+                  <ExerciseNameInput
                     value={exercise.name}
-                    onChange={(event) => onChange(dayKey, exerciseIndex, 'name', event.target.value)}
+                    exerciseLibrary={exerciseLibrary}
+                    onChange={(value) => {
+                      onChange(dayKey, exerciseIndex, 'name', value);
+                      onChange(dayKey, exerciseIndex, 'exerciseId', '');
+                    }}
+                    onSelect={(libraryExercise) => onExerciseSelect(dayKey, exerciseIndex, libraryExercise)}
+                    onRename={(libraryExercise, nextName) =>
+                      onExerciseRename(dayKey, exerciseIndex, libraryExercise, nextName)
+                    }
                   />
                 </label>
                 <label>
                   Sets
                   <input
-                    type="number"
-                    min="1"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={exercise.sets}
-                    onChange={(event) => onChange(dayKey, exerciseIndex, 'sets', Number(event.target.value))}
+                    onChange={(event) => {
+                      const digitsOnly = event.target.value.replace(/\D/g, '');
+                      onChange(dayKey, exerciseIndex, 'sets', digitsOnly ? Number(digitsOnly) : '');
+                    }}
                   />
                 </label>
                 <label>
@@ -1689,6 +2148,17 @@ function EditPanel({
                     placeholder="e.g., 8-10 reps or ✅"
                     onChange={(event) => onChange(dayKey, exerciseIndex, 'reps', event.target.value)}
                   />
+                </label>
+                <label className="exercise-editor__superset" data-active={Boolean(exercise.superset)}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(exercise.superset)}
+                    onChange={(event) => onChange(dayKey, exerciseIndex, 'superset', event.target.checked)}
+                  />
+                  <span className="exercise-editor__superset-track" aria-hidden="true">
+                    <span className="exercise-editor__superset-thumb" />
+                  </span>
+                  <span className="exercise-editor__superset-text">Superset</span>
                 </label>
               </div>
               <div className="exercise-editor__actions">
@@ -1891,6 +2361,63 @@ function EditPanel({
           Add Cardio Plan
         </button>
       </div>
+      <div className="quick-edit-panel">
+        <div className="quick-edit-panel__copy">
+          <label>
+            <select
+              value={copySourceDay}
+              onChange={(event) => {
+                const sourceDay = event.target.value;
+                setCopySourceDay(sourceDay);
+                setPendingDuplicate(false);
+              }}
+              aria-label="Copy from day"
+            >
+              <option value="">Choose day</option>
+              {DAY_KEYS.filter((key) => key !== dayKey).map((key) => (
+                <option key={key} value={key}>{DAY_LABELS[key]}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="quick-edit-panel__duplicate">
+          {pendingDuplicate ? (
+            <div className="interval-plan-confirm">
+              <span className="interval-plan-confirm__label">
+                Duplicate {DAY_LABELS[copySourceDay] || 'selected day'}?
+              </span>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => setPendingDuplicate(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={() => {
+                  onCopyDay(copySourceDay, dayKey);
+                  setCopySourceDay('');
+                  setPendingDuplicate(false);
+                }}
+                disabled={!copySourceDay}
+              >
+                Confirm
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--secondary"
+              onClick={() => setPendingDuplicate(true)}
+              disabled={!copySourceDay}
+            >
+              Duplicate day
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1945,7 +2472,12 @@ function IntervalPlanView({ plan, onStart, onToggleComplete, isComplete }) {
           </div>
         </div>
         <div className="exercise-card__meta">
-          <button type="button" className="btn btn--secondary" onClick={(event) => { event.stopPropagation(); onStart(); }} disabled={!hasSegments}>
+          <button
+            type="button"
+            className="btn interval-card__start"
+            onClick={(event) => { event.stopPropagation(); onStart(); }}
+            disabled={!hasSegments}
+          >
             Start
           </button>
         </div>
@@ -1954,10 +2486,12 @@ function IntervalPlanView({ plan, onStart, onToggleComplete, isComplete }) {
         <div className="exercise-card__body">
           <ul className="interval-list">
             {plan.segments.map((segment, index) => (
-              <li key={`${segment.label}-${index}`}>
-                <span>
+              <li key={`${segment.label}-${index}`} className="interval-list__item">
+                <span className="interval-list__label">
                   {segment.label || `Interval ${index + 1}`}
-                  {Number(segment.repeat) > 1 ? ` ×${segment.repeat}` : ''}
+                  {Number(segment.repeat) > 1 && (
+                    <span className="interval-list__rep">Repeat x{segment.repeat}</span>
+                  )}
                 </span>
                 <span className="interval-list__duration">{segment.duration || '--'}</span>
               </li>
@@ -1995,7 +2529,7 @@ function IntervalTimerPlayer({ timer, intervalId, onPause, onResume, onReset, on
       <div className="interval-player__controls">
         <button
           type="button"
-          className="btn btn--ghost"
+          className="btn btn--secondary interval-control"
           onClick={onRestart}
           aria-label="Restart or go back"
         >
@@ -2017,7 +2551,7 @@ function IntervalTimerPlayer({ timer, intervalId, onPause, onResume, onReset, on
         )}
         <button
           type="button"
-          className="btn btn--secondary"
+          className="btn btn--secondary interval-control"
           onClick={onSkip}
           aria-label="Skip interval"
         >

@@ -14,8 +14,13 @@ import {
 import { toPng } from 'html-to-image';
 import { getWeekInfo, getWeekStartDateFromId } from '../../workout/date';
 import {
+  deleteExerciseLibraryItem,
+  normalizeExerciseName,
+  renameExerciseLibraryItem,
+  subscribeToExerciseLibrary,
   subscribeToSettings,
   subscribeToWorkoutHistory,
+  upsertExerciseLibraryItem,
 } from '../../workout/service';
 import {
   computeDeloadState,
@@ -53,9 +58,17 @@ function WorkoutData() {
   const [authState, setAuthState] = useState({ user: null, loading: true });
   const [settings, setSettings] = useState(null);
   const [history, setHistory] = useState([]);
+  const [exerciseLibrary, setExerciseLibrary] = useState([]);
   const [rangeWeeks, setRangeWeeks] = useState(12);
   const [selectedExercises, setSelectedExercises] = useState([]);
   const [exerciseSearch, setExerciseSearch] = useState('');
+  const [librarySearch, setLibrarySearch] = useState('');
+  const [newExerciseName, setNewExerciseName] = useState('');
+  const [editingExerciseId, setEditingExerciseId] = useState('');
+  const [editingExerciseName, setEditingExerciseName] = useState('');
+  const [pendingDeleteExerciseId, setPendingDeleteExerciseId] = useState('');
+  const [libraryStatus, setLibraryStatus] = useState('');
+  const [libraryError, setLibraryError] = useState('');
   const [weekInfo, setWeekInfo] = useState(() => getWeekInfo());
   const chartRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -87,15 +100,20 @@ function WorkoutData() {
     if (!authState.user) {
       setSettings(null);
       setHistory([]);
+      setExerciseLibrary([]);
       return;
     }
     const unsubSettings = subscribeToSettings(authState.user.uid, (data) => setSettings(data));
     const unsubHistory = subscribeToWorkoutHistory(authState.user.uid, 52, (docs) => {
       setHistory(docs);
     });
+    const unsubExercises = subscribeToExerciseLibrary(authState.user.uid, (data) => {
+      setExerciseLibrary(data);
+    });
     return () => {
       unsubSettings();
       unsubHistory();
+      unsubExercises();
     };
   }, [authState.user]);
 
@@ -117,7 +135,7 @@ function WorkoutData() {
       const summaries = doc.exerciseSummaries || {};
       Object.keys(summaries).forEach((exerciseId) => {
         const name = summaries[exerciseId]?.name || 'Exercise';
-        const key = name.toLowerCase().trim();
+        const key = summaries[exerciseId]?.exerciseId || exerciseId;
         if (!map.has(key)) {
           map.set(key, { id: key, name });
         }
@@ -140,6 +158,14 @@ function WorkoutData() {
     if (!query) return exerciseOptions;
     return exerciseOptions.filter((option) => option.name.toLowerCase().includes(query));
   }, [exerciseOptions, exerciseSearch]);
+
+  const filteredExerciseLibrary = useMemo(() => {
+    const query = normalizeExerciseName(librarySearch);
+    if (!query) return exerciseLibrary;
+    return exerciseLibrary.filter((exercise) =>
+      normalizeExerciseName(exercise.name).includes(query)
+    );
+  }, [exerciseLibrary, librarySearch]);
 
   useEffect(() => {
     if (!selectedExercises.length) return;
@@ -164,18 +190,18 @@ function WorkoutData() {
         weekId: doc.weekId,
         label: formatWeekLabel(doc.weekId),
       };
-      const mergedByName = new Map();
-      Object.values(doc.exerciseSummaries || {}).forEach((summary) => {
-        const name = (summary?.name || 'Exercise').toLowerCase().trim();
-        if (!mergedByName.has(name)) {
-          mergedByName.set(name, []);
+      const mergedByExerciseId = new Map();
+      Object.entries(doc.exerciseSummaries || {}).forEach(([summaryId, summary]) => {
+        const key = summary?.exerciseId || summaryId;
+        if (!mergedByExerciseId.has(key)) {
+          mergedByExerciseId.set(key, []);
         }
         if (summary?.value !== undefined && summary.value !== null) {
-          mergedByName.get(name).push(Number(summary.value));
+          mergedByExerciseId.get(key).push(Number(summary.value));
         }
       });
       selectedExercises.forEach((exerciseId) => {
-        const values = mergedByName.get(exerciseId) || [];
+        const values = mergedByExerciseId.get(exerciseId) || [];
         if (values.length) {
           const maxValue = Math.max(...values);
           const converted = convertUnitValue(
@@ -199,12 +225,13 @@ function WorkoutData() {
     docs.forEach((doc) => {
       const entries = doc.exerciseSummaries || {};
       const merged = new Map();
-      Object.keys(entries).forEach((exerciseId) => {
-        const summary = entries[exerciseId] || {};
-        const name = (summary.name || 'Exercise').toLowerCase().trim();
-        if (filterSet && !filterSet.has(name)) return;
-        if (!merged.has(name)) {
-          merged.set(name, {
+      Object.keys(entries).forEach((summaryId) => {
+        const summary = entries[summaryId] || {};
+        const exerciseId = summary.exerciseId || summaryId;
+        if (filterSet && !filterSet.has(exerciseId)) return;
+        if (!merged.has(exerciseId)) {
+          merged.set(exerciseId, {
+            exerciseId,
             name: summary.name || 'Exercise',
             values: [],
             hasNumericData: false,
@@ -238,7 +265,7 @@ function WorkoutData() {
             weekId: doc.weekId,
             weekStartISO: doc.weekStartISO || doc.weekId,
             unitSystem: doc.unitSystem || 'lbs',
-            exerciseId: summary.name || '',
+            exerciseId: summary.exerciseId || '',
             exerciseName: summary.name || '',
             value: maxValue === '' ? '' : maxValue,
             source: summary.source || '',
@@ -299,6 +326,67 @@ function WorkoutData() {
     }
   };
 
+  const handleAddLibraryExercise = async () => {
+    if (!authState.user) return;
+    setLibraryStatus('');
+    setLibraryError('');
+    try {
+      const created = await upsertExerciseLibraryItem(authState.user.uid, newExerciseName);
+      if (!created) {
+        setLibraryError('Enter an exercise name.');
+        return;
+      }
+      setNewExerciseName('');
+      setLibraryStatus(`${created.name} saved.`);
+    } catch (err) {
+      setLibraryError(err.message);
+    }
+  };
+
+  const handleStartEditLibraryExercise = (exercise) => {
+    setEditingExerciseId(exercise.id);
+    setEditingExerciseName(exercise.name);
+    setPendingDeleteExerciseId('');
+    setLibraryStatus('');
+    setLibraryError('');
+  };
+
+  const handleSaveLibraryExerciseName = async () => {
+    if (!authState.user || !editingExerciseId) return;
+    setLibraryStatus('');
+    setLibraryError('');
+    try {
+      const updated = await renameExerciseLibraryItem(authState.user.uid, editingExerciseId, editingExerciseName);
+      if (!updated) {
+        setLibraryError('Enter an exercise name.');
+        return;
+      }
+      setEditingExerciseId('');
+      setEditingExerciseName('');
+      setLibraryStatus(`${updated.name} saved.`);
+    } catch (err) {
+      setLibraryError(err.message);
+    }
+  };
+
+  const handleDeleteLibraryExercise = async (exercise) => {
+    if (!authState.user || !exercise?.id) return;
+    setLibraryStatus('');
+    setLibraryError('');
+    try {
+      await deleteExerciseLibraryItem(authState.user.uid, exercise.id);
+      if (editingExerciseId === exercise.id) {
+        setEditingExerciseId('');
+        setEditingExerciseName('');
+      }
+      setPendingDeleteExerciseId('');
+      setSelectedExercises((prev) => prev.filter((id) => id !== exercise.id));
+      setLibraryStatus(`${exercise.name} deleted.`);
+    } catch (err) {
+      setLibraryError(err.message);
+    }
+  };
+
   if (authState.loading) {
     return (
       <main className="workout-page">
@@ -340,6 +428,124 @@ function WorkoutData() {
           <span>Exercise weights reduced by {Math.round(deloadState.deloadPercent)}%.</span>
         </div>
       )}
+      <section className="workout-panel">
+        <div className="workout-panel__header">
+          <div>
+            <h2>Exercise Library</h2>
+            <p className="help-text">Manage saved exercise names used for workout history tracking.</p>
+          </div>
+          <span className="tag">{exerciseLibrary.length} saved</span>
+        </div>
+        <div className="exercise-library-tools">
+          <label>
+            Add an exercise
+            <div className="exercise-library-tools__row">
+              <input
+                type="text"
+                value={newExerciseName}
+                onChange={(event) => setNewExerciseName(event.target.value)}
+                placeholder="Exercise name"
+              />
+              <button type="button" className="btn btn--secondary" onClick={handleAddLibraryExercise}>
+                Add
+              </button>
+            </div>
+          </label>
+          <label>
+            Search saved exercises
+            <input
+              type="text"
+              value={librarySearch}
+              onChange={(event) => setLibrarySearch(event.target.value)}
+              placeholder="Search exercises"
+            />
+          </label>
+        </div>
+        {libraryStatus && <p className="status-banner">{libraryStatus}</p>}
+        {libraryError && <p className="form-error">{libraryError}</p>}
+        <div className="exercise-library-list">
+          {filteredExerciseLibrary.slice(0, 120).map((exercise) => (
+            <div key={exercise.id} className="exercise-library-item">
+              {editingExerciseId === exercise.id ? (
+                <>
+                  <input
+                    type="text"
+                    value={editingExerciseName}
+                    onChange={(event) => setEditingExerciseName(event.target.value)}
+                  />
+                  <div className="exercise-library-item__actions">
+                    <button type="button" className="btn btn--secondary" onClick={handleSaveLibraryExerciseName}>
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      onClick={() => {
+                        setEditingExerciseId('');
+                        setEditingExerciseName('');
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span>{exercise.name}</span>
+                  <div className="exercise-library-item__actions">
+                    {pendingDeleteExerciseId === exercise.id ? (
+                      <div className="interval-plan-confirm">
+                        <span className="interval-plan-confirm__label">Delete?</span>
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          onClick={() => setPendingDeleteExerciseId('')}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--danger"
+                          onClick={() => handleDeleteLibraryExercise(exercise)}
+                        >
+                          Confirm
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          onClick={() => handleStartEditLibraryExercise(exercise)}
+                        >
+                          Edit name
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          onClick={() => {
+                            setEditingExerciseId('');
+                            setEditingExerciseName('');
+                            setPendingDeleteExerciseId(exercise.id);
+                            setLibraryStatus('');
+                            setLibraryError('');
+                          }}
+                          aria-label={`Delete ${exercise.name}`}
+                        >
+                          <img src="/icons/trash.svg" alt="" aria-hidden="true" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+          {filteredExerciseLibrary.length === 0 && (
+            <p className="help-text">No saved exercises found.</p>
+          )}
+        </div>
+      </section>
       <section className="workout-panel workout-panel--data">
         <div className="workout-toolbar workout-toolbar--data">
           <div>

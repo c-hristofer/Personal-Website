@@ -9,9 +9,11 @@ import {
   orderBy,
   query,
   setDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import {
+  COMMON_WEIGHTLIFTING_EXERCISES,
   createEmptyPlanDays,
   DAY_KEYS,
   createDefaultDayNames,
@@ -30,6 +32,43 @@ const getCompletionRef = (uid, weekId) => doc(db, 'users', uid, 'workoutCompleti
 const getSettingsRef = (uid) => doc(db, 'users', uid, 'workoutSettings', 'settings');
 const getHistoryCollection = (uid) => collection(db, 'users', uid, 'workoutHistory');
 const getHistoryRef = (uid, weekId) => doc(db, 'users', uid, 'workoutHistory', weekId);
+const getExerciseLibraryCollection = (uid) => collection(db, 'users', uid, 'workoutExercises');
+const getExerciseLibraryRef = (uid, exerciseId) => doc(db, 'users', uid, 'workoutExercises', exerciseId);
+
+export const normalizeExerciseName = (name = '') =>
+  name
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+export const buildExerciseId = (name = '') => {
+  const normalized = normalizeExerciseName(name);
+  const slug = normalized.replace(/\s+/g, '-');
+  return slug || `exercise-${Date.now()}`;
+};
+
+const normalizeExerciseLibraryDoc = (docId, data = {}) => {
+  const name = (data.name || '').toString().trim();
+  const normalizedName = normalizeExerciseName(data.normalizedName || name);
+  return {
+    id: docId,
+    name,
+    normalizedName,
+    category: data.category || '',
+    aliases: Array.isArray(data.aliases) ? data.aliases : [],
+    createdAt: data.createdAt || null,
+    updatedAt: data.updatedAt || null,
+  };
+};
+
+const getExerciseNameFromLibrary = (exercise, exerciseMap = {}) => {
+  const libraryExercise = exercise?.exerciseId ? exerciseMap[exercise.exerciseId] : null;
+  return libraryExercise?.name || exercise?.name || 'Exercise';
+};
 
 const getDefaultSettings = () => ({
   unitSystem: 'lbs',
@@ -41,6 +80,11 @@ const getDefaultSettings = () => ({
   deloadAnchorWeekId: null,
   lastArchivedWeekId: null,
   lastArchivedAt: null,
+  exerciseLibraryMigratedAt: null,
+  historyResetForExerciseLibraryAt: null,
+  restTimerEnabled: false,
+  restTimerSeconds: 90,
+  historyInsightsEnabled: true,
 });
 
 const normalizeSettingsPayload = (data = {}) => {
@@ -58,6 +102,15 @@ const normalizeSettingsPayload = (data = {}) => {
     lastSelectedDay,
     lastArchivedWeekId: data.lastArchivedWeekId || null,
     lastArchivedAt: data.lastArchivedAt || null,
+    exerciseLibraryMigratedAt: data.exerciseLibraryMigratedAt || null,
+    historyResetForExerciseLibraryAt: data.historyResetForExerciseLibraryAt || null,
+    restTimerEnabled: Boolean(data.restTimerEnabled),
+    restTimerSeconds: Number.isFinite(Number(data.restTimerSeconds))
+      ? Math.min(600, Math.max(15, Number(data.restTimerSeconds)))
+      : defaults.restTimerSeconds,
+    historyInsightsEnabled: data.historyInsightsEnabled === undefined
+      ? defaults.historyInsightsEnabled
+      : Boolean(data.historyInsightsEnabled),
   };
 };
 
@@ -65,7 +118,7 @@ const normalizeDays = (days = {}) => {
   const base = createEmptyPlanDays();
   if (Array.isArray(days)) {
     DAY_KEYS.forEach((key, index) => {
-      base[key] = Array.isArray(days[index]) ? days[index] : [];
+      base[key] = Array.isArray(days[index]) ? days[index].map(normalizePlanExercise) : [];
     });
     return base;
   }
@@ -78,7 +131,9 @@ const normalizeDays = (days = {}) => {
   Object.keys(days || {}).forEach((rawKey) => {
     const normalizedKey = keyMap[(rawKey || '').toString().toLowerCase()];
     if (normalizedKey) {
-      base[normalizedKey] = Array.isArray(days[rawKey]) ? days[rawKey] : [];
+      base[normalizedKey] = Array.isArray(days[rawKey])
+        ? days[rawKey].map(normalizePlanExercise)
+        : [];
     }
   });
   DAY_KEYS.forEach((key) => {
@@ -88,6 +143,14 @@ const normalizeDays = (days = {}) => {
   });
   return base;
 };
+
+const normalizePlanExercise = (exercise = {}) => ({
+  ...exercise,
+  id: exercise.id ? exercise.id.toString() : '',
+  exerciseId: exercise.exerciseId ? exercise.exerciseId.toString() : '',
+  name: exercise.name ? exercise.name.toString() : '',
+  superset: Boolean(exercise.superset),
+});
 
 const normalizeDayNames = (names = {}) => {
   const defaults = createDefaultDayNames();
@@ -213,15 +276,30 @@ const normalizeDayOrder = (order = {}, days = {}, intervalPlans = {}, cardioPlan
   return normalized;
 };
 
-export const computeWeekExerciseSummaries = (days = {}, weightsByDay = {}) => {
+export const computeWeekExerciseSummaries = (
+  days = {},
+  weightsByDay = {},
+  exerciseMap = {},
+  completionDayData = {},
+  options = {},
+) => {
   const summaries = {};
+  const completedOnly = Boolean(options.completedOnly);
   DAY_KEYS.forEach((dayKey) => {
     const exercises = Array.isArray(days[dayKey]) ? days[dayKey] : [];
     const dayWeights = weightsByDay[dayKey]?.exercises || {};
+    const dayCompletions = completionDayData?.[dayKey]?.exercises || {};
     exercises.forEach((exercise) => {
-      const nameKey = (exercise?.name || '').toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const summaryKey = nameKey || exercise.id;
+      if (completedOnly && !dayCompletions[exercise.id]?.completed) {
+        return;
+      }
+      const exerciseName = getExerciseNameFromLibrary(exercise, exerciseMap);
+      const nameKey = buildExerciseId(exerciseName);
+      const summaryKey = exercise.exerciseId || nameKey || exercise.id;
       const entry = dayWeights[exercise.id] || {};
+      if (entry.exerciseId && exercise.exerciseId && entry.exerciseId !== exercise.exerciseId) {
+        return;
+      }
       const setWeights = Array.isArray(entry.setWeights) ? entry.setWeights : [];
       const normalized = setWeights.map((value) => (value ?? '').toString());
       const numericValues = normalized
@@ -229,7 +307,8 @@ export const computeWeekExerciseSummaries = (days = {}, weightsByDay = {}) => {
         .filter((value) => value !== null);
       if (!summaries[summaryKey]) {
         summaries[summaryKey] = {
-          name: exercise.name,
+          exerciseId: summaryKey,
+          name: exerciseName,
           value: null,
           source: 'max',
           hasNumericData: false,
@@ -337,6 +416,332 @@ export const saveWeightsForDay = (uid, dayKey, exercises) => {
   }, { merge: true });
 };
 
+export const subscribeToExerciseLibrary = (uid, callback) => {
+  if (!uid) return () => {};
+  const colRef = getExerciseLibraryCollection(uid);
+  const exerciseQuery = query(colRef, orderBy('name'));
+  return onSnapshot(exerciseQuery, (snapshot) => {
+    const payload = [];
+    snapshot.forEach((docSnap) => {
+      const exercise = normalizeExerciseLibraryDoc(docSnap.id, docSnap.data());
+      if (exercise.name) {
+        payload.push(exercise);
+      }
+    });
+    callback(payload);
+  }, (error) => {
+    console.error('Workout exercise library subscription failed', error);
+  });
+};
+
+export const upsertExerciseLibraryItem = async (uid, rawName) => {
+  if (!uid) return null;
+  const name = (rawName || '').toString().trim();
+  const normalizedName = normalizeExerciseName(name);
+  if (!normalizedName) return null;
+  const id = buildExerciseId(name);
+  const ref = getExerciseLibraryRef(uid, id);
+  const existing = await getDoc(ref);
+  const now = new Date().toISOString();
+  const payload = {
+    name,
+    normalizedName,
+    updatedAt: now,
+  };
+  if (!existing.exists()) {
+    payload.createdAt = now;
+  }
+  await setDoc(ref, payload, { merge: true });
+  return { id, name, normalizedName };
+};
+
+export const renameExerciseLibraryItem = async (uid, exerciseId, rawName) => {
+  if (!uid || !exerciseId) return null;
+  const name = (rawName || '').toString().trim();
+  const normalizedName = normalizeExerciseName(name);
+  if (!normalizedName) return null;
+  const now = new Date().toISOString();
+  const batch = writeBatch(db);
+  const exerciseDocs = await getDocs(getExerciseLibraryCollection(uid));
+  let targetExercise = null;
+  exerciseDocs.forEach((docSnap) => {
+    const exercise = normalizeExerciseLibraryDoc(docSnap.id, docSnap.data());
+    if (exercise.normalizedName === normalizedName && exercise.id !== exerciseId) {
+      targetExercise = exercise;
+    }
+  });
+  const nextExerciseId = targetExercise?.id || exerciseId;
+  const nextName = targetExercise?.name || name;
+  if (targetExercise) {
+    batch.delete(getExerciseLibraryRef(uid, exerciseId));
+  } else {
+    batch.set(getExerciseLibraryRef(uid, exerciseId), {
+      name,
+      normalizedName,
+      updatedAt: now,
+    }, { merge: true });
+  }
+
+  const planSnap = await getDoc(getPlanRef(uid));
+  if (planSnap.exists()) {
+    const rawPlan = planSnap.data();
+    const normalizedDays = normalizeDays(rawPlan.days);
+    const nextDays = createEmptyPlanDays();
+    let changed = false;
+    DAY_KEYS.forEach((dayKey) => {
+      nextDays[dayKey] = (normalizedDays[dayKey] || []).map((exercise) => {
+        if (exercise.exerciseId !== exerciseId) return exercise;
+        changed = true;
+        return { ...exercise, exerciseId: nextExerciseId, name: nextName };
+      });
+    });
+    if (changed) {
+      const normalizedIntervals = normalizeIntervalPlans(rawPlan.intervalPlans);
+      const normalizedCardio = normalizeCardioPlans(rawPlan.cardioPlans);
+      batch.set(getPlanRef(uid), {
+        days: nextDays,
+        dayNames: normalizeDayNames(rawPlan.dayNames),
+        intervalPlans: normalizedIntervals,
+        cardioPlans: normalizedCardio,
+        dayOrder: normalizeDayOrder(rawPlan.dayOrder, nextDays, normalizedIntervals, normalizedCardio),
+        updatedAt: now,
+      }, { merge: true });
+      const weightDocs = await getDocs(getWeightsCollection(uid));
+      weightDocs.forEach((docSnap) => {
+        const dayKey = docSnap.id;
+        const weightDoc = docSnap.data();
+        const exercisesBySlot = new Map(
+          (nextDays[dayKey] || []).map((exercise) => [exercise.id, exercise]),
+        );
+        const nextWeights = {};
+        Object.keys(weightDoc.exercises || {}).forEach((slotId) => {
+          const weightEntry = weightDoc.exercises[slotId] || {};
+          const planExercise = exercisesBySlot.get(slotId);
+          nextWeights[slotId] = {
+            ...weightEntry,
+            exerciseId: planExercise?.exerciseId || weightEntry.exerciseId || '',
+          };
+        });
+        batch.set(getWeightRef(uid, dayKey), {
+          ...weightDoc,
+          dayKey,
+          exercises: nextWeights,
+          updatedAt: now,
+        }, { merge: true });
+      });
+    }
+  }
+
+  await batch.commit();
+  return {
+    id: nextExerciseId,
+    name: nextName,
+    normalizedName: targetExercise?.normalizedName || normalizedName,
+  };
+};
+
+export const deleteExerciseLibraryItem = async (uid, exerciseId) => {
+  if (!uid || !exerciseId) return;
+  await deleteDoc(getExerciseLibraryRef(uid, exerciseId));
+};
+
+export const deleteWorkoutHistory = async (uid) => {
+  if (!uid) return;
+  const historyDocs = await getDocs(getHistoryCollection(uid));
+  const deletions = [];
+  historyDocs.forEach((docSnap) => {
+    deletions.push(deleteDoc(docSnap.ref).catch(() => {}));
+  });
+  await Promise.all(deletions);
+};
+
+const collectPlanExerciseNames = (days = {}) => {
+  const names = [];
+  DAY_KEYS.forEach((dayKey) => {
+    const exercises = Array.isArray(days[dayKey]) ? days[dayKey] : [];
+    exercises.forEach((exercise) => {
+      const name = (exercise?.name || '').toString().trim();
+      if (name) names.push(name);
+    });
+  });
+  return names;
+};
+
+const buildCanonicalExerciseLibrary = (existingExercises = [], planNames = []) => {
+  const byNormalizedName = new Map();
+  const duplicates = [];
+  const addCandidate = (candidate, source) => {
+    const name = (candidate?.name || candidate || '').toString().trim();
+    const normalizedName = normalizeExerciseName(candidate?.normalizedName || name);
+    if (!normalizedName) return;
+    const preferredId = buildExerciseId(name);
+    const id = candidate?.id || preferredId;
+    const current = byNormalizedName.get(normalizedName);
+    const next = {
+      id: current?.id || preferredId,
+      name: current?.name || name,
+      normalizedName,
+      aliases: Array.isArray(candidate?.aliases) ? candidate.aliases : [],
+      category: candidate?.category || '',
+      source,
+      existingIds: candidate?.id ? [candidate.id] : [],
+      createdAt: candidate?.createdAt || null,
+    };
+    if (!current) {
+      byNormalizedName.set(normalizedName, next);
+      return;
+    }
+    if (candidate?.id) {
+      current.existingIds.push(candidate.id);
+      if (candidate.id !== current.id) {
+        duplicates.push(candidate.id);
+      }
+    }
+    if (id === preferredId && current.id !== preferredId) {
+      duplicates.push(current.id);
+      current.id = preferredId;
+      current.name = name;
+    }
+  };
+
+  COMMON_WEIGHTLIFTING_EXERCISES.forEach((name) => addCandidate(name, 'seed'));
+  planNames.forEach((name) => addCandidate(name, 'plan'));
+  existingExercises.forEach((exercise) => addCandidate(exercise, 'existing'));
+
+  return {
+    exercises: Array.from(byNormalizedName.values()),
+    duplicateIds: Array.from(new Set(duplicates.filter(Boolean))),
+  };
+};
+
+const attachExerciseIdsToDays = (days = {}, canonicalExercises = []) => {
+  const byNormalizedName = new Map(
+    canonicalExercises.map((exercise) => [exercise.normalizedName, exercise]),
+  );
+  const byId = new Map(canonicalExercises.map((exercise) => [exercise.id, exercise]));
+  const nextDays = createEmptyPlanDays();
+  DAY_KEYS.forEach((dayKey) => {
+    nextDays[dayKey] = (days[dayKey] || []).map((exercise) => {
+      const existing = exercise.exerciseId ? byId.get(exercise.exerciseId) : null;
+      const byName = byNormalizedName.get(normalizeExerciseName(exercise.name));
+      const libraryExercise = existing || byName;
+      return {
+        ...exercise,
+        exerciseId: libraryExercise?.id || exercise.exerciseId || buildExerciseId(exercise.name),
+        name: libraryExercise?.name || (exercise.name || '').toString().trim(),
+      };
+    });
+  });
+  return nextDays;
+};
+
+const attachExerciseIdsToWeights = (weightsByDay = {}, days = {}) => {
+  const nextWeightsByDay = {};
+  DAY_KEYS.forEach((dayKey) => {
+    const weightDoc = weightsByDay[dayKey];
+    if (!weightDoc?.exercises) return;
+    const exercisesBySlot = new Map(
+      (days[dayKey] || []).map((exercise) => [exercise.id, exercise]),
+    );
+    const nextExercises = {};
+    Object.keys(weightDoc.exercises || {}).forEach((slotId) => {
+      const weightEntry = weightDoc.exercises[slotId] || {};
+      const planExercise = exercisesBySlot.get(slotId);
+      nextExercises[slotId] = {
+        ...weightEntry,
+        exerciseId: weightEntry.exerciseId || planExercise?.exerciseId || '',
+      };
+    });
+    nextWeightsByDay[dayKey] = {
+      ...weightDoc,
+      exercises: nextExercises,
+    };
+  });
+  return nextWeightsByDay;
+};
+
+export const ensureExerciseLibraryMigration = async (uid, previousWeekId = null) => {
+  if (!uid) return;
+  const settingsSnap = await getDoc(getSettingsRef(uid));
+  const settings = settingsSnap.exists() ? settingsSnap.data() : {};
+  if (settings.exerciseLibraryMigratedAt && settings.historyResetForExerciseLibraryAt) {
+    return;
+  }
+
+  const [planSnap, exerciseDocs, weightDocs] = await Promise.all([
+    getDoc(getPlanRef(uid)),
+    getDocs(getExerciseLibraryCollection(uid)),
+    getDocs(getWeightsCollection(uid)),
+  ]);
+  const rawPlan = planSnap.exists() ? planSnap.data() : {};
+  const normalizedDays = normalizeDays(rawPlan.days);
+  const normalizedIntervals = normalizeIntervalPlans(rawPlan.intervalPlans);
+  const normalizedCardio = normalizeCardioPlans(rawPlan.cardioPlans);
+  const existingExercises = [];
+  exerciseDocs.forEach((docSnap) => {
+    existingExercises.push(normalizeExerciseLibraryDoc(docSnap.id, docSnap.data()));
+  });
+  const weightsByDay = {};
+  weightDocs.forEach((docSnap) => {
+    weightsByDay[docSnap.id] = docSnap.data();
+  });
+
+  const { exercises, duplicateIds } = buildCanonicalExerciseLibrary(
+    existingExercises,
+    collectPlanExerciseNames(normalizedDays),
+  );
+  const daysWithExerciseIds = attachExerciseIdsToDays(normalizedDays, exercises);
+  const weightsWithExerciseIds = attachExerciseIdsToWeights(weightsByDay, daysWithExerciseIds);
+  const now = new Date().toISOString();
+  const batch = writeBatch(db);
+
+  exercises.forEach((exercise) => {
+    batch.set(getExerciseLibraryRef(uid, exercise.id), {
+      name: exercise.name,
+      normalizedName: exercise.normalizedName,
+      aliases: exercise.aliases || [],
+      category: exercise.category || '',
+      createdAt: exercise.createdAt || now,
+      updatedAt: now,
+    }, { merge: true });
+  });
+  duplicateIds.forEach((exerciseId) => {
+    if (!exercises.some((exercise) => exercise.id === exerciseId)) {
+      batch.delete(getExerciseLibraryRef(uid, exerciseId));
+    }
+  });
+  batch.set(getPlanRef(uid), {
+    days: daysWithExerciseIds,
+    dayNames: normalizeDayNames(rawPlan.dayNames),
+    intervalPlans: normalizedIntervals,
+    cardioPlans: normalizedCardio,
+    dayOrder: normalizeDayOrder(rawPlan.dayOrder, daysWithExerciseIds, normalizedIntervals, normalizedCardio),
+    updatedAt: now,
+  }, { merge: true });
+  Object.keys(weightsWithExerciseIds).forEach((dayKey) => {
+    batch.set(getWeightRef(uid, dayKey), {
+      ...weightsWithExerciseIds[dayKey],
+      dayKey,
+      updatedAt: now,
+    }, { merge: true });
+  });
+  batch.set(getSettingsRef(uid), {
+    exerciseLibraryMigratedAt: settings.exerciseLibraryMigratedAt || now,
+    lastArchivedWeekId: previousWeekId || settings.lastArchivedWeekId || null,
+    lastArchivedAt: previousWeekId ? now : (settings.lastArchivedAt || null),
+    updatedAt: now,
+  }, { merge: true });
+
+  await batch.commit();
+  if (!settings.historyResetForExerciseLibraryAt) {
+    await deleteWorkoutHistory(uid);
+    await setDoc(getSettingsRef(uid), {
+      historyResetForExerciseLibraryAt: now,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+  }
+};
+
 export const subscribeToSettings = (uid, callback) => {
   if (!uid) return () => {};
   const ref = getSettingsRef(uid);
@@ -427,6 +832,19 @@ export const subscribeToCompletions = (uid, weekId, callback) => {
   });
 };
 
+export const getWorkoutCompletions = async (uid, weekId) => {
+  if (!uid || !weekId) return { weekStartISO: weekId, dayData: {} };
+  const snapshot = await getDoc(getCompletionRef(uid, weekId));
+  if (!snapshot.exists()) {
+    return { weekStartISO: weekId, dayData: {} };
+  }
+  const data = snapshot.data();
+  return {
+    weekStartISO: data.weekStartISO || weekId,
+    dayData: data.dayData || {},
+  };
+};
+
 export const updateCompletion = async (uid, weekId, dayKey, target, data) => {
   const ref = getCompletionRef(uid, weekId);
   const entry = {
@@ -475,6 +893,7 @@ export const deleteWorkoutData = async (uid) => {
   const weightDocs = await getDocs(getWeightsCollection(uid));
   const completionDocs = await getDocs(getCompletionsCollection(uid));
   const historyDocs = await getDocs(getHistoryCollection(uid));
+  const exerciseDocs = await getDocs(getExerciseLibraryCollection(uid));
   const deletions = [
     deleteDoc(planRef).catch(() => {}),
     deleteDoc(settingsRef).catch(() => {}),
@@ -488,17 +907,21 @@ export const deleteWorkoutData = async (uid) => {
   historyDocs.forEach((docSnap) => {
     deletions.push(deleteDoc(docSnap.ref).catch(() => {}));
   });
+  exerciseDocs.forEach((docSnap) => {
+    deletions.push(deleteDoc(docSnap.ref).catch(() => {}));
+  });
   await Promise.all(deletions);
 };
 
 export const exportWorkoutData = async (uid) => {
   if (!uid) return null;
-  const [planSnap, settingsSnap, weightDocs, completionDocs, historyDocs] = await Promise.all([
+  const [planSnap, settingsSnap, weightDocs, completionDocs, historyDocs, exerciseDocs] = await Promise.all([
     getDoc(getPlanRef(uid)),
     getDoc(getSettingsRef(uid)),
     getDocs(getWeightsCollection(uid)),
     getDocs(getCompletionsCollection(uid)),
     getDocs(getHistoryCollection(uid)),
+    getDocs(getExerciseLibraryCollection(uid)),
   ]);
   const weights = {};
   weightDocs.forEach((docSnap) => {
@@ -512,9 +935,14 @@ export const exportWorkoutData = async (uid) => {
   historyDocs.forEach((docSnap) => {
     history[docSnap.id] = docSnap.data();
   });
+  const exercises = {};
+  exerciseDocs.forEach((docSnap) => {
+    exercises[docSnap.id] = docSnap.data();
+  });
   return {
     plan: planSnap.data() || { days: createEmptyPlanDays() },
     settings: settingsSnap.data() || {},
+    exercises,
     weights,
     completions,
     history,

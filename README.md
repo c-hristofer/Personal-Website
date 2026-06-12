@@ -37,14 +37,21 @@ The Workout dashboard stores all user data inside Firestore under `/users/{uid}`
 
 ```
 /users/{uid}/workoutPlan/plan
-  days: { monday: [{ id, name, sets, reps }, ...], ... }
+  days: { monday: [{ id, exerciseId, name, sets, reps, superset }, ...], ... }
   dayNames: { monday: "Chest & Tris", ... } // Friendly labels shown on dashboard
+  updatedAt: ISO string
+
+/users/{uid}/workoutExercises/{exerciseId}
+  name: "Bench Press"
+  normalizedName: "bench press"
+  aliases: string[]
   updatedAt: ISO string
 
 /users/{uid}/workoutWeights/{dayKey}
   dayKey: "monday"…"sunday"
   exercises: {
-    [exerciseId]: {
+    [planSlotId]: {
+      exerciseId: stable workoutExercises document id
       setWeights: number[] | null[],
       updatedAt: ISO string
     }
@@ -55,7 +62,7 @@ The Workout dashboard stores all user data inside Firestore under `/users/{uid}`
   dayData: {
     monday: {
       exercises: {
-        [exerciseId]: {
+        [planSlotId]: {
           completed: boolean,
           completedSets: boolean[],
           updatedAt: ISO string
@@ -68,7 +75,10 @@ The Workout dashboard stores all user data inside Firestore under `/users/{uid}`
   unitSystem: "lbs" | "kg"
   defaultDayView: "today" | "last"
   lastSelectedDay: dayKey
+  restTimerEnabled: boolean
+  restTimerSeconds: number
+  historyInsightsEnabled: boolean
   updatedAt: ISO string
 ```
 
-Weights and plan info persist across weeks. Completion documents are keyed by `weekId` (NYC Monday start) so the UI naturally resets checkmarks every Monday at 12:00 AM America/New_York without clearing the plan or weights.
+Weights and plan info persist across weeks. Completion documents are keyed by `weekId` (NYC Monday start) so the UI naturally resets checkmarks every Monday at 12:00 AM America/New_York without clearing the plan or weights. Exercise completion is tracked per set and rolls up to the exercise when every set is checked. Weekly workout history only archives exercise weights for tracker exercises that were checked complete for that week.
